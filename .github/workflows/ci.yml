@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch makes the in-flight run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Gate (typecheck · lint · test · build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Run as four steps rather than `pnpm gate` so a failure names itself in
+      # the GitHub UI instead of collapsing into "gate failed".
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+# Phase 2 adds two jobs here, per the §14 acceptance criteria:
+#
+#   · rls-test           — `supabase start` + pgTAP. A policy without a test is
+#                          not done (§8), so this gates every PR.
+#   · migrate-from-scratch — every migration replayed against an empty database.
+#                          supabase/migrations is the single source of truth
+#                          (ADR-001), which is only true if the from-scratch path
+#                          is exercised continuously rather than at release.
+#
+# e2e.yml (Playwright + axe) arrives in Phase 11.
