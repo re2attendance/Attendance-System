@@ -50,9 +50,13 @@ const eslintConfig = defineConfig([
           pattern: "src/features/attendance/rules/**/*",
         },
         {
+          // A feature has TWO entry points, and the split is forced by Next's
+          // module graph (ADR-013): index.ts is client-safe, server.ts is the
+          // surface that carries `server-only`. A barrel that mixes them drags
+          // next/headers into a browser bundle.
           type: "feature-index",
           mode: "full",
-          pattern: "src/features/*/index.ts",
+          pattern: "src/features/*/{index,server}.ts",
           capture: ["feature"],
         },
         {

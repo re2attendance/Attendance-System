@@ -13,15 +13,17 @@ import type { AppRole, CurrentUser, RoleScopeType } from "./session";
  * file. That asymmetry is what makes duplicating the logic acceptable: the
  * copy cannot fail open.
  *
- * Two things this deliberately does NOT do:
+ * Appointment periods ARE respected here, via `user.repSectionIds` — which
+ * getUser() reads from course_rep_assignments on the SERVER, applying the same
+ * conditions as auth_is_active_rep_for_section() against the same clock. An
+ * earlier version read the flat marker in user_roles instead and would have
+ * shown rep screens to someone whose appointment ended yesterday, every button
+ * on them failing. Reading what the database reads is what keeps the mirror
+ * honest; it is not a second clock, because the browser is never asked.
  *
- *   · check appointment periods. auth_is_active_rep_for_section() does that in
- *     the database against now(). Reproducing time-window logic here would put
- *     a clock in the UI layer, and the UI's clock is the one thing §5 says not
- *     to trust. A rep whose appointment expired mid-session sees a button that
- *     stops working; that is the correct failure.
- *   · check the conflict-of-interest rule. Hiding "Approve" on your own record
- *     is cosmetic; the RLS policy is what stops it, and it is tested.
+ * What this deliberately does NOT do is check the conflict-of-interest rule.
+ * Hiding "Approve" on your own record is cosmetic; the RLS policy is what stops
+ * it, and it is tested.
  */
 
 export type Action =
@@ -61,20 +63,19 @@ export function isInstructor(user: CurrentUser): boolean {
 }
 
 /**
- * Holds a rep grant for this section.
+ * Has a LIVE rep appointment for this section.
  *
- * Note the name: `holds`, not `is`. The grant is in user_roles, but the
- * AUTHORITY is in course_rep_assignments with its appointment period, and only
- * the database checks that. This answers "should the UI show rep controls",
- * not "may they act".
+ * Reads `repSectionIds`, which getUser() loads from course_rep_assignments —
+ * the same table auth_is_active_rep_for_section() consults, with the same
+ * period conditions, evaluated against the same server clock.
+ *
+ * NOT user_roles. The marker there has no dates, so a rep whose appointment
+ * ended yesterday would still hold it, still see rep screens, and find every
+ * button on them failing. §4 is explicit that a rep manages "only within their
+ * appointment period" — so the period is the thing to read.
  */
-export function holdsRepGrantForSection(user: CurrentUser, sectionId: string): boolean {
-  return user.roles.some(
-    (g) =>
-      g.role === "course_rep" &&
-      g.scopeType === "class_section" &&
-      g.scopeId === sectionId,
-  );
+export function isActiveRepForSection(user: CurrentUser, sectionId: string): boolean {
+  return user.repSectionIds.includes(sectionId);
 }
 
 export function can(user: CurrentUser, action: Action, scope?: Scope): boolean {
@@ -109,7 +110,7 @@ export function can(user: CurrentUser, action: Action, scope?: Scope): boolean {
     case "calendar.declare.section":
       // Rep or instructor, for a specific section.
       if (!scope || scope.type !== "class_section" || !scope.id) return false;
-      return isInstructor(user) || holdsRepGrantForSection(user, scope.id);
+      return isInstructor(user) || isActiveRepForSection(user, scope.id);
 
     case "report.export":
       return isInstructor(user);

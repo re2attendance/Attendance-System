@@ -56,3 +56,17 @@ export const INVITE_TTL_DAYS = 7;
 export function inviteExpiry(): Date {
   return new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
 }
+
+/**
+ * A token and its hash, together.
+ *
+ * The pairing is the API other features get (via server.ts): you cannot obtain
+ * a hash without the plaintext it came from, and you cannot mint a plaintext
+ * without immediately having the hash to store. Handing out `hashToken` alone
+ * would let a caller hash something that is not a real token; handing out
+ * `generateToken` alone would let one be stored in plaintext.
+ */
+export function mintInvitationToken(): { token: string; tokenHash: string } {
+  const token = generateToken();
+  return { token, tokenHash: hashToken(token) };
+}

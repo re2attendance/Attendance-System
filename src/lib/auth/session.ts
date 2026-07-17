@@ -25,6 +25,25 @@ export type CurrentUser = {
   status: Database["public"]["Enums"]["profile_status"];
   /** Additive and scoped (§4). A user is Student AND Course Rep at once. */
   roles: RoleGrant[];
+  /**
+   * Sections where this user has a LIVE rep appointment, right now.
+   *
+   * Read from course_rep_assignments, not from user_roles, and the distinction
+   * is the whole point. §4: a rep manages "only for the class/section they are
+   * assigned to, only within their appointment period." user_roles holds a
+   * declarative marker with no dates; course_rep_assignments holds the
+   * appointment, and it is what RLS consults
+   * (auth_is_active_rep_for_section).
+   *
+   * Reading the marker instead would drift: a rep whose appointment expired
+   * yesterday would still see rep screens, and every button on them would fail.
+   * Reading the same source the database reads means can() and RLS agree by
+   * construction rather than by discipline.
+   *
+   * Evaluated against the SERVER's clock, which is the only one that decides
+   * anything (§5).
+   */
+  repSectionIds: string[];
 };
 
 /**
@@ -51,14 +70,23 @@ export const getUser = cache(async (): Promise<CurrentUser | null> => {
   // RLS-enforced: profiles_read_own means this returns their row and no one
   // else's, and user_roles_read_own the same. Even if this query were wrong, it
   // could not read someone else's identity.
-  const [{ data: profile }, { data: roles }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("id, full_name, email, institution_id, matric_number, avatar_path, status")
-      .eq("id", user.id)
-      .maybeSingle(),
-    supabase.from("user_roles").select("role, scope_type, scope_id").eq("user_id", user.id),
-  ]);
+  const [{ data: profile }, { data: roles }, { data: appointments }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id, full_name, email, institution_id, matric_number, avatar_path, status")
+        .eq("id", user.id)
+        .maybeSingle(),
+      supabase.from("user_roles").select("role, scope_type, scope_id").eq("user_id", user.id),
+      // The same conditions auth_is_active_rep_for_section() applies in SQL.
+      // Kept in step deliberately: if these two ever disagree, a rep sees a
+      // button that 403s.
+      supabase
+        .from("course_rep_assignments")
+        .select("class_section_id, starts_at, ends_at")
+        .eq("user_id", user.id)
+        .is("revoked_at", null),
+    ]);
 
   // An auth.users row with no profile. Real, and worth being loud about rather
   // than treating as logged-out: it means the invite flow half-completed, and
@@ -83,6 +111,15 @@ export const getUser = cache(async (): Promise<CurrentUser | null> => {
       scopeType: r.scope_type,
       scopeId: r.scope_id,
     })),
+    repSectionIds: (appointments ?? [])
+      .filter((a) => {
+        // starts_at <= now < ends_at, on the server's clock.
+        const now = Date.now();
+        const startsAt = new Date(a.starts_at).getTime();
+        const endsAt = a.ends_at ? new Date(a.ends_at).getTime() : null;
+        return startsAt <= now && (endsAt === null || endsAt > now);
+      })
+      .map((a) => a.class_section_id),
   };
 });
 

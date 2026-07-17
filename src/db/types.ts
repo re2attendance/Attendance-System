@@ -1190,10 +1190,12 @@ export type Database = {
           accepted_by: string | null
           created_at: string
           email: string
+          enroll_in_section_id: string | null
           expires_at: string
           id: string
           institution_id: string
           invited_by: string | null
+          matric_number: string | null
           revoked_at: string | null
           role: Database["public"]["Enums"]["app_role"]
           scope_id: string | null
@@ -1206,10 +1208,12 @@ export type Database = {
           accepted_by?: string | null
           created_at?: string
           email: string
+          enroll_in_section_id?: string | null
           expires_at: string
           id?: string
           institution_id: string
           invited_by?: string | null
+          matric_number?: string | null
           revoked_at?: string | null
           role: Database["public"]["Enums"]["app_role"]
           scope_id?: string | null
@@ -1222,10 +1226,12 @@ export type Database = {
           accepted_by?: string | null
           created_at?: string
           email?: string
+          enroll_in_section_id?: string | null
           expires_at?: string
           id?: string
           institution_id?: string
           invited_by?: string | null
+          matric_number?: string | null
           revoked_at?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           scope_id?: string | null
@@ -1239,6 +1245,13 @@ export type Database = {
             columns: ["accepted_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invitations_enroll_in_section_id_fkey"
+            columns: ["enroll_in_section_id"]
+            isOneToOne: false
+            referencedRelation: "class_sections"
             referencedColumns: ["id"]
           },
           {
@@ -1851,6 +1864,14 @@ export type Database = {
           role: Database["public"]["Enums"]["app_role"]
           scope_id: string
           scope_type: Database["public"]["Enums"]["role_scope_type"]
+        }[]
+      }
+      import_roster: {
+        Args: { p_rows: Json }
+        Returns: {
+          already_enrolled: number
+          enrolled: number
+          invited: number
         }[]
       }
       institution_today: { Args: { p_institution_id: string }; Returns: string }

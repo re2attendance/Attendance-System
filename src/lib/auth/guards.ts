@@ -42,6 +42,9 @@ export async function requireInstructor(): Promise<CurrentUser> {
 export function homePathFor(user: CurrentUser): string {
   if (isAdmin(user)) return "/admin";
   if (isInstructor(user)) return "/instructor";
-  if (user.roles.some((r) => r.role === "course_rep")) return "/rep";
+  // A LIVE appointment, not the user_roles marker. Someone whose term as rep
+  // ended is a student again, and should land on Today rather than on a queue
+  // they can no longer work.
+  if (user.repSectionIds.length > 0) return "/rep";
   return "/student/today";
 }

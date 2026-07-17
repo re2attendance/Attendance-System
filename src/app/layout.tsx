@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { Toaster } from "sonner";
 
 import { ThemeProvider } from "@/components/theme-provider";
@@ -49,7 +50,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          {/* nuqs keeps table filters and page numbers in the URL (ADR-004), so
+              a rep can share or reload a filtered queue. The adapter is what
+              lets it write to Next's router. */}
+          <NuqsAdapter>{children}</NuqsAdapter>
           {/* §11.6 requires a 5-second undo toast on every rep decision, so the
               toaster lives at the root rather than in the (app) group — a toast
               must survive the navigation that triggered it.
