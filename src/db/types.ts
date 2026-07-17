@@ -1778,6 +1778,10 @@ export type Database = {
       }
     }
     Functions: {
+      accept_invitation: {
+        Args: { p_full_name: string; p_token_hash: string }
+        Returns: string
+      }
       auth_can_administer_section: {
         Args: { p_section_id: string }
         Returns: boolean
@@ -1835,6 +1839,18 @@ export type Database = {
           event_id: string
           records_voided: number
           sessions_cancelled: number
+        }[]
+      }
+      get_invitation_by_token_hash: {
+        Args: { p_token_hash: string }
+        Returns: {
+          email: string
+          institution_name: string
+          invalid_reason: string
+          is_valid: boolean
+          role: Database["public"]["Enums"]["app_role"]
+          scope_id: string
+          scope_type: Database["public"]["Enums"]["role_scope_type"]
         }[]
       }
       institution_today: { Args: { p_institution_id: string }; Returns: string }

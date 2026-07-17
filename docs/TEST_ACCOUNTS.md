@@ -40,7 +40,7 @@ order by a.class_section_id, a.starts_at;
 §13: "Seeds must exercise every status and every dashboard chart — a seed that produces empty dashboards is useless."
 
 - **300 students · 20 sections · 1,149 enrollments · 9,400 records** across an 8-week term in progress.
-- **All nine statuses** populated, weighted like a real cohort: ~5,700 present, ~1,300 late, ~1,200 absent, plus rejected, excused, permission_granted, cancelled and both pending states.
+- **All ten statuses** populated, weighted like a real cohort: ~5,700 present, ~1,300 late, ~1,200 absent, plus rejected, excused, permission_granted, cancelled and both pending states.
 - **3 sessions open right now**, staggered so the Today screen shows one inside the present window, one already into the late window, and one that just started — the three states the live session card must render, visible at once.
 - **A live verification queue** with ~150 pending requests waiting, oldest-first.
 - **A shared-device flag** on section 1's open session: two students submitting from one fingerprint. Flagged, never auto-blocked (§7).
@@ -51,6 +51,10 @@ order by a.class_section_id, a.starts_at;
 
 ## Notes
 
-- Passwords are bcrypt-hashed in the seed, so these accounts genuinely authenticate once Phase 3 lands.
+- Passwords are bcrypt-hashed in the seed, and these accounts **genuinely authenticate** — verified in Phase 3 by logging in for real and watching a live JWT hit live RLS.
+
+  That sentence used to be a prediction, and it was wrong. As shipped in Phase 2, **not one of the 304 accounts could log in**: the seed wrote `auth.users` rows with NULL in `confirmation_token` and friends, GoTrue scans those into non-nullable Go strings, and every login died with a 500 blaming "Database error querying schema". The columns are nullable in the schema, so Postgres accepted the rows happily — Postgres and GoTrue disagree about what a valid user is, and only one of them is consulted at INSERT time.
+
+  Nothing caught it, because nothing tried: Phase 2 had no login, and the pgTAP suite sets `request.jwt.claims` directly and never goes through GoTrue. 104 RLS tests passed against accounts that could not authenticate. Fixed in `supabase/seeds/00_helpers.sql`, which now explains why the empty strings are there.
 - The seed is **deterministic** — every "random" choice is a hash of stable inputs, so a reset reproduces the same database. A seed that differs run to run makes a failing test a coin toss.
 - Inbucket/Mailpit catches all outbound mail locally at http://127.0.0.1:54324.

@@ -1,26 +1,19 @@
-import Link from "next/link";
+import { redirect } from "next/navigation";
 
-/* Placeholder. The real root redirects by role once auth lands (Phase 3).
+import { homePathFor } from "@/lib/auth/guards";
+import { getUser } from "@/lib/auth/session";
 
-   Deliberately not a landing page: §11.9 names a hero section on a dashboard as
-   an anti-tell, and §0 says if something isn't built yet, it isn't wired to the
-   UI. This says what exists and gets out of the way. */
-export default function Home() {
-  return (
-    <main className="mx-auto flex min-h-dvh max-w-[1200px] flex-col justify-center px-6 py-10">
-      <h1 className="text-24 font-semibold text-ink">Attendance</h1>
-      <p className="mt-1 max-w-prose text-13 text-mute">
-        University attendance management. Phase 1 — foundation. Sign-in arrives
-        in Phase 3; until then the only thing built is the design system.
-      </p>
-      <p className="mt-4 text-13">
-        <Link
-          href="/dev/tokens"
-          className="text-deep underline underline-offset-4"
-        >
-          Design tokens
-        </Link>
-      </p>
-    </main>
-  );
+/**
+ * The root is a switchboard, not a page.
+ *
+ * §11.9 names a hero section on a dashboard as an anti-tell, and there is
+ * nothing to say here that is worth a tap: someone opening this app wants to
+ * report present, or work a queue. Send them there.
+ *
+ * homePathFor() orders by authority, so a rep — who is also a student (§4) —
+ * lands on the queue. Reporting their own attendance is two taps from anywhere.
+ */
+export default async function RootPage() {
+  const user = await getUser();
+  redirect(user ? homePathFor(user) : "/login");
 }

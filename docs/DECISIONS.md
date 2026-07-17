@@ -399,3 +399,34 @@ Two mitigations worth considering, both deferred and tracked:
 2. **Require instructor confirmation within N hours or the declaration lapses.** Stronger, but a rep declaring an emergency during an actual emergency may not get a reply, and the failure mode is students marked absent for a day the campus was shut.
 
 Raised in the Phase 2 addendum report rather than decided unilaterally: this is a policy call about how much a university trusts its course reps, and that is not mine to make.
+
+---
+
+## ADR-013 — A feature's `index.ts` must be client-safe
+
+**Date:** 2026-07-17 · **Status:** Accepted · **Phase:** 3
+
+### Context
+
+The structure doc's boundary rule is "`features/*` may not import from another `features/*` internals — only its `index.ts`", enforced by `eslint-plugin-boundaries`. Phase 3 was the first phase with client components, and the rule immediately collided with Next's module graph.
+
+`features/invitations/index.ts` re-exported `queries.ts`, which carries `import "server-only"`. `accept-invite-form.tsx` — a client component — imported the barrel to get a Zod schema. Turbopack refused the build, tracing `server-only` → `supabase/server.ts` → `next/headers` into a client bundle.
+
+The schema was innocent. The barrel was not: a re-export pulls the whole module, so importing one client-safe symbol from an index that also names a server-only one drags the entire server graph across the boundary.
+
+### Decision
+
+**A feature's `index.ts` is imported by client and server alike, so it must be client-safe.**
+
+- **Exportable:** schemas, types, and `"use server"` actions. Next replaces action modules with RPC stubs in a client bundle, so naming them in a barrel is safe.
+- **Not exportable:** `queries.ts`, or anything else carrying `server-only`.
+- The **app layer imports `./queries` directly.** A page is server-side by default, and the structure doc's own table expects pages to reach into the feature they render ("A page: thin. Auth check + render feature components").
+- If another **feature** ever needs a server-only query, add a `server.ts` entry beside `index.ts` and widen the ESLint rule to treat both as entry points. Not done now because nothing needs it, and a convention with no users is a convention nobody follows.
+
+The same phase also moved `Field` out of `features/auth/components/` into `components/ui/`, because `invitations` needed it — the structure doc's rule ("a component used by 2+ features → `components/`") applied, and the boundary rule found it before a human did.
+
+### Consequences
+
+- **The failure is loud**, which is the only reason this is a footnote rather than a leak. A build error is the correct response to a server module entering a client bundle; the alternative — it silently working — is how service-role keys reach browsers.
+- The boundary rule earns its keep for a second time. In Phase 1 it caught a service-role import from a page (after its own `mode: "file"` bug was found and fixed); here it caught a structural mistake about where a shared component lives.
+- **Cost:** cross-feature server queries have no home yet. When Phase 4 needs one, `server.ts` is the answer, not widening `index.ts`.

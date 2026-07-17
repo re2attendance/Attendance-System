@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 
+import { Toaster } from "sonner";
+
 import { ThemeProvider } from "@/components/theme-provider";
 
 import "./globals.css";
@@ -48,6 +50,27 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          {/* §11.6 requires a 5-second undo toast on every rep decision, so the
+              toaster lives at the root rather than in the (app) group — a toast
+              must survive the navigation that triggered it.
+
+              Styled to the tokens, because sonner ships its own palette and
+              §11.9 names a stray accent as an anti-tell. richColors is
+              deliberately off: it would paint success green and error red from
+              sonner's own scale, and our status colours are desaturated ~20%
+              for a reason (§11.3). */}
+          <Toaster
+            position="bottom-center"
+            toastOptions={{
+              classNames: {
+                toast:
+                  "!bg-paper !text-ink !border !border-line !rounded-card !text-13 !font-sans",
+                description: "!text-mute",
+                actionButton: "!bg-signal !text-ink !rounded-control",
+                cancelButton: "!bg-wash !text-mute !rounded-control",
+              },
+            }}
+          />
         </ThemeProvider>
       </body>
     </html>

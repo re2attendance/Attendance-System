@@ -37,6 +37,25 @@ returns int language sql immutable as $$
   select ('x' || substr(md5(p_key), 1, 8))::bit(32)::bigint % 100;
 $$;
 
+-- Creates an auth.users row that GoTrue will actually accept.
+--
+-- The empty strings below are not padding. GoTrue scans these columns into
+-- non-nullable Go strings, so a NULL makes it fail the login with
+-- `converting NULL to string is unsupported`, surfaced to the client as a 500
+-- "Database error querying schema" that says nothing about the real cause.
+--
+-- The columns are nullable in the schema, so the database accepts the row
+-- happily. Postgres and GoTrue disagree about what a valid user is, and only
+-- one of them is asked at INSERT time.
+--
+-- This shipped in Phase 2 and made every one of the 304 seeded accounts
+-- unable to log in. Nothing caught it: Phase 2 had no login, and the pgTAP
+-- suite sets request.jwt.claims directly — it never goes through GoTrue, so the
+-- 104 RLS tests all passed against accounts that could not authenticate. Found
+-- in Phase 3 by driving a real login, which is the only thing that would have.
+--
+-- The lesson generalises: writing directly into another system's tables means
+-- adopting its invariants without its validation.
 create or replace function seed.make_user(p_key text, p_email text)
 returns uuid language plpgsql as $$
 declare v_id uuid := seed.seed_uid(p_key);
@@ -44,11 +63,15 @@ begin
   insert into auth.users (
     id, instance_id, aud, role, email, encrypted_password,
     email_confirmed_at, created_at, updated_at,
-    raw_app_meta_data, raw_user_meta_data
+    raw_app_meta_data, raw_user_meta_data,
+    confirmation_token, recovery_token,
+    email_change, email_change_token_new, email_change_token_current,
+    phone_change, phone_change_token, reauthentication_token
   ) values (
     v_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
     p_email, extensions.crypt('password123', extensions.gen_salt('bf')),
-    now(), now(), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb
+    now(), now(), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
+    '', '', '', '', '', '', '', ''
   );
   return v_id;
 end;

@@ -223,6 +223,17 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
+# false is correct for THIS product and dangerous if misread.
+#
+# Accounts are invite-only (§2 Q4). The invitation link is itself the proof that
+# the person controls the address — it was emailed to them and carries a
+# 256-bit token — and accept_invitation() additionally refuses unless the new
+# account's email matches the one invited. So a second confirmation email would
+# confirm something already proven.
+#
+# IF `auth.self_registration` IS EVER TURNED ON, THIS MUST BECOME true.
+# Self-signup with confirmations off lets anyone create an account claiming any
+# address, including a colleague's.
 enable_confirmations = false
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
