@@ -165,7 +165,7 @@ The signature element — the live session card with the yellow hairline filling
 
 ## 6. Risks, ranked by how much they'd hurt
 
-**1. Docker is not installed in this WSL instance.** `npx supabase start` needs it, so Phases 2+ are blocked until it's there. Phase 1 is unaffected. Needs Docker Desktop with WSL2 integration enabled, or Docker Engine installed directly in WSL. **This is the one thing I need from you before Phase 2.**
+**1. ~~Docker is not installed in this WSL instance~~ → RESOLVED 2026-07-17.** Docker Desktop 29.6.1 is reachable from WSL (Ubuntu 24.04), containers run, and `supabase init` succeeds. Phase 2 is unblocked. Note for the runbook: Docker Desktop must be *running* on the Windows side for `pnpm db:start` to work — the first check this session found no daemon, and the failure mode is a confusing "command not found" rather than "Docker isn't running".
 
 **2. ~~OneDrive-synced folder on `/mnt/c`~~ → RESOLVED (ADR-006).** Repo moved to `~/attendance` on the WSL filesystem. **Replaced by a new risk: the work is no longer backed up.** OneDrive was doing that, badly; nothing is doing it now. Git is initialized locally, but a local repo on a single WSL disk is not a backup — `wsl --unregister` ends the project. **Adding a git remote and pushing is a Phase 1 exit condition**, not a nice-to-have.
 
@@ -191,10 +191,10 @@ Biometrics/facial recognition, NFC/RFID, native mobile apps, LMS/SIS integration
 
 1. ~~Approval of this plan~~ — **approved 2026-07-17.**
 2. ~~Decision on the OneDrive/`/mnt/c` location~~ — **delegated and decided: ADR-006, repo moved to `~/attendance`.**
-3. **Docker** — still outstanding (risk 1). Not needed for Phase 1; **required before Phase 2 starts.**
+3. ~~Docker~~ — **resolved 2026-07-17** (risk 1).
 
 Phase 1 exit conditions, on top of the gate and the §14 acceptance criteria:
 
-- A git remote exists and the repo is pushed (risk 2). Until this is true the project lives on one disk.
-- Docker is installed and `npx supabase start` comes up clean, so Phase 2 isn't blocked on it.
+- ~~Docker installed and `supabase start` clean~~ — **done.**
+- **A git remote exists and the repo is pushed** (risk 2) — **still open.** Phase 0–1 is committed (`b655dfe`) but lives on one disk. The user is prompted for any external account (GitHub included) rather than me assuming one.
 </content>

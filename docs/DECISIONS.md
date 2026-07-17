@@ -50,7 +50,7 @@ Migrations, pgTAP RLS tests and seeds need a Postgres that can be dropped and re
 
 - **Good:** RLS tests and reset-from-scratch run against disposable infrastructure. No cloud cost, no risk to a real project, no shared-state flakiness between contributors or CI runs.
 - **Good:** the from-scratch migration path is exercised continuously, so it can't rot.
-- **Cost:** Docker is a hard prerequisite. **It is not currently installed in this WSL instance** — Phase 2 onward is blocked until it is. Phase 1 is unaffected. Tracked as risk 1 in `PLAN.md`.
+- **Cost:** Docker is a hard prerequisite. *(Resolved 2026-07-17: Docker Desktop 29.6.1 is reachable from WSL and `supabase init` succeeds. Caveat for `RUNBOOK.md` — Docker Desktop must be running on the Windows side, and when it isn't, WSL reports `docker: command not found` rather than anything about the daemon, which is a misleading first impression.)*
 - **Cost:** local/remote parity must be verified explicitly at Phase 12 rather than continuously.
 
 ---
@@ -213,3 +213,35 @@ Either way the ring clears 3:1 against the surface, and it still reads as yellow
   - `--status-pending` was `#a1a1aa` → 2.56:1 on white, under the 3:1 non-text floor. It is the dot that drives the rep queue, so it was the worst one to have wrong. Now `#71717a` on light, tracking `--mute` in both modes.
   - `--status-late` desaturated from orange-500 was `#e1782d` → 2.90:1 on `--wash`. It passed on `--paper` (3.01:1) and failed on the warm page background. Now `#d16025` (orange-600, -20% sat).
 - Both were found by computing the ratios rather than looking at them, which is the argument for `/dev/tokens` computing live and CI asserting.
+
+---
+
+## ADR-009 — A submitted-but-never-verified record becomes `absent` at close
+
+**Date:** 2026-07-17 · **Status:** Accepted, flagged for review · **Phase:** 2
+
+### Context
+
+§6.5 says: "Session closed with no approved record → absent."
+
+Read literally that covers a case the spec never names out loud: a student submits an attendance request on time, the rep never gets to it, the session auto-closes, and the student is marked **absent**. They did everything right and lost anyway, for someone else's inaction.
+
+This is the only derivation in the system where that is true, which is why it is worth writing down rather than leaving in a branch.
+
+### Decision
+
+Implement it literally. `deriveStatus` returns `absent` for a submitted, undecided record once `sessionStatus === 'closed'`.
+
+The alternatives are worse:
+
+- **Auto-approve on close** — hands every student a guaranteed route to `present`: submit, wait, say nothing. It converts a verification system into an honour system, which is precisely what §1 says this product exists not to be.
+- **Leave it `pending_verification` forever** — the attendance percentage never resolves, the eligibility report can never run, and the registrar's export has a hole in it. "Pending" is not a defensible thing to show a registrar in week 14.
+- **A new `unverified` status** — would be the honest answer, but the `attendance_status` enum is specified in §5 and does not include one. Adding it is a schema change with reach into every chip, filter, report and percentage rule. Not a decision to smuggle in via a rules-engine branch.
+
+The system's actual answers to the unfairness live elsewhere and are load-bearing: the rep queue shows an elapsed timer per request and sorts oldest-first (§6.3), the weekly rep digest surfaces pending items (§9), and the student can open a dispute (§6.6) which an instructor can resolve with an override.
+
+### Consequences
+
+- **Cost, and it is real:** rep inattention is charged to the student, not the rep. The rep-activity report (median verification latency, §10) is what makes this visible, and it should be watched — if reps routinely let sessions close on pending queues, this decision is producing wrong records at scale and disputes will not keep up.
+- **Cost:** this is the most likely source of end-of-term disputes by volume. `docs/RUNBOOK.md` should carry a "session closed with a pending queue" entry.
+- **Flagged for review:** if the reviewer wants a distinct `unverified` status, that is a legitimate call — it is a Phase 2 schema change, cheap now and expensive after Phase 8's reports and Phase 10's exports are built on the enum. Raised in the Phase 2 report.

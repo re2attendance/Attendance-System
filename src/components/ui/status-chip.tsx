@@ -1,18 +1,12 @@
+import type { Database } from "@/db/types";
 import { cn } from "@/lib/utils";
 
-/* Mirrors the `attendance_status` enum (§5). The DB is the source of truth for
-   this union; once Phase 2 generates src/db/types.ts this should be derived
-   from it rather than restated. Tracked as a Phase 2 follow-up. */
-export type AttendanceStatus =
-  | "pending_verification"
-  | "pending_permission_review"
-  | "present"
-  | "late"
-  | "permission_granted"
-  | "absent"
-  | "rejected"
-  | "excused"
-  | "cancelled";
+/* Derived from the schema, not restated. supabase/migrations is the single
+   source of truth (ADR-001), so adding a status to the enum makes the Record
+   maps below fail to typecheck until every one of them handles it — which is
+   exactly what should happen. Phase 1 hand-wrote this union with a note to come
+   back; this is that. */
+export type AttendanceStatus = Database["public"]["Enums"]["attendance_status"];
 
 /* §11.3 — quiet chips, not a rainbow.
 

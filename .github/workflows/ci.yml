@@ -43,13 +43,56 @@ jobs:
       - name: Build
         run: pnpm build
 
-# Phase 2 adds two jobs here, per the §14 acceptance criteria:
-#
-#   · rls-test           — `supabase start` + pgTAP. A policy without a test is
-#                          not done (§8), so this gates every PR.
-#   · migrate-from-scratch — every migration replayed against an empty database.
-#                          supabase/migrations is the single source of truth
-#                          (ADR-001), which is only true if the from-scratch path
-#                          is exercised continuously rather than at release.
-#
+  database:
+    name: Database (migrate-from-scratch · RLS policy tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # `supabase start` runs every migration in supabase/migrations against an
+      # empty database, in order. That IS the migrate-from-scratch check, and it
+      # runs on every PR rather than at release — supabase/migrations is only
+      # the single source of truth (ADR-001) if the from-scratch path is
+      # exercised continuously. A migration that has drifted from what the
+      # schema actually needs fails here, while it is still cheap.
+      - name: Start Supabase (replays every migration from scratch)
+        run: pnpm exec supabase start
+
+      # §8: "RLS policy tests are mandatory ... A policy without a test doesn't
+      # count as done." This job is what makes that sentence enforceable rather
+      # than aspirational. RLS is the security boundary of this product: if
+      # these fail, a student can read another student's academic record, and
+      # nothing upstream will have stopped it.
+      - name: RLS policy tests (pgTAP)
+        run: pnpm exec supabase test db supabase/tests/*.test.sql
+
+      # The generated types must match the schema that just applied. If this
+      # produces a diff, someone changed a migration and did not regenerate —
+      # which means src/db/types.ts is lying to the typechecker, and the
+      # typechecker is the thing the rest of the app trusts.
+      - name: Generated types are up to date
+        run: |
+          pnpm exec supabase gen types typescript --local > /tmp/types.ts
+          if ! diff -q /tmp/types.ts src/db/types.ts; then
+            echo "::error::src/db/types.ts is stale. Run 'pnpm db:types' and commit the result."
+            diff -u src/db/types.ts /tmp/types.ts || true
+            exit 1
+          fi
+
+      - name: Stop Supabase
+        if: always()
+        run: pnpm exec supabase stop
+
 # e2e.yml (Playwright + axe) arrives in Phase 11.

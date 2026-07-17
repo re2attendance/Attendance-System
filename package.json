@@ -14,7 +14,14 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "gate": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
+    "gate": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:seed": "supabase db reset",
+    "db:test": "supabase test db supabase/tests/*.test.sql",
+    "db:types": "supabase gen types typescript --local > src/db/types.ts",
+    "db:diff": "supabase db diff -f"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
@@ -35,6 +42,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "eslint-plugin-boundaries": "^5.0.1",
+    "supabase": "^2.109.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^3.2.4"
