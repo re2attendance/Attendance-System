@@ -9,7 +9,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 \ir helpers.sql
 
-select plan(24);
+select plan(26);
 
 select tests.seed_fixture();
 
@@ -285,6 +285,55 @@ select ok(
   (select submitted_at from public.attendance_records
     where student_id = tests.uid('outsider')) > now() - interval '1 minute',
   'a client-supplied submitted_at is OVERWRITTEN with server time, not trusted'
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ...and it is IMMUTABLE afterwards. Regression test.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- The force_server_time trigger originally stamped now() onto submitted_at on
+-- every INSERT *or UPDATE* where it was non-null. So every approval silently
+-- rewrote submitted_at to the approval time: a record submitted at 10:49 and
+-- approved at 11:13 came back reading 11:13.
+--
+-- That is the exact injustice §6.5 exists to prevent. deriveStatus anchors on
+-- submitted_at precisely so a slow queue cannot make an on-time student late —
+-- and this fed it the approval time, making every slow approval a late student.
+-- The rules engine was correct; its input was corrupt.
+--
+-- Nothing caught it. The tests above set `status` by hand, so the derivation
+-- never ran against a rewritten timestamp. This is the test that would have.
+
+-- Backdate a submission to well outside any present window, as service_role
+-- (which legitimately writes history and is exempt from the trigger).
+update public.attendance_records
+set submitted_at = now() - interval '30 minutes'
+where id = tests.uid('record_s2');
+
+select tests.set_auth_user(tests.uid('instructor'));
+
+update public.attendance_records
+set decision = 'approved', decided_by = tests.uid('instructor'), status = 'present'
+where id = tests.uid('record_s2');
+
+select tests.clear_auth();
+
+select ok(
+  (select submitted_at from public.attendance_records where id = tests.uid('record_s2'))
+    < now() - interval '25 minutes',
+  'approving a record does NOT rewrite submitted_at — a slow rep cannot make an on-time student late'
+);
+
+select tests.set_auth_user(tests.uid('instructor'));
+update public.attendance_records
+set submitted_at = now()
+where id = tests.uid('record_s2');
+select tests.clear_auth();
+
+select ok(
+  (select submitted_at from public.attendance_records where id = tests.uid('record_s2'))
+    < now() - interval '25 minutes',
+  'nor can anyone with a JWT move submitted_at directly — it is a fact about a moment that has passed'
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────

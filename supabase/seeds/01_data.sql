@@ -58,15 +58,6 @@ insert into public.semesters (id, institution_id, academic_year_id, name, starts
    (current_date - interval '9 weeks')::date, (current_date + interval '5 weeks')::date,
    (current_date - interval '7 weeks')::date, 'active', null);
 
--- §5: sessions must not be auto-generated onto these.
-insert into public.academic_calendar_events (institution_id, semester_id, title, event_type, starts_on, ends_on) values
-  (seed.seed_uid('inst'), seed.seed_uid('sem_now'), 'Mid-semester break', 'break',
-   (current_date - interval '3 weeks')::date, (current_date - interval '2 weeks' - interval '4 days')::date),
-  (seed.seed_uid('inst'), seed.seed_uid('sem_now'), 'Founders'' Day', 'holiday',
-   (current_date - interval '5 weeks')::date, (current_date - interval '5 weeks')::date),
-  (seed.seed_uid('inst'), seed.seed_uid('sem_now'), 'Examinations', 'exam_period',
-   (current_date + interval '5 weeks')::date, (current_date + interval '7 weeks')::date);
-
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Rules
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -327,6 +318,49 @@ begin
 end;
 $$;
 
+-- §5: sessions must not be auto-generated onto these.
+insert into public.academic_calendar_events (institution_id, semester_id, class_section_id, title, event_type, starts_on, ends_on, declared_by) values
+  (seed.seed_uid('inst'), seed.seed_uid('sem_now'), null, 'Mid-semester break', 'break',
+   (current_date - interval '3 weeks')::date, (current_date - interval '2 weeks' - interval '4 days')::date,
+   seed.seed_uid('admin')),
+  (seed.seed_uid('inst'), seed.seed_uid('sem_now'), null, 'Founders'' Day', 'holiday',
+   (current_date - interval '5 weeks')::date, (current_date - interval '5 weeks')::date,
+   seed.seed_uid('admin')),
+  (seed.seed_uid('inst'), seed.seed_uid('sem_now'), null, 'Examinations', 'exam_period',
+   (current_date + interval '5 weeks')::date, (current_date + interval '7 weeks')::date,
+   seed.seed_uid('admin')),
+  -- An upcoming public holiday, so the Today screen and the schedule generator
+  -- have a real one to respect rather than a hypothetical.
+  (seed.seed_uid('inst'), seed.seed_uid('sem_now'), null, 'Republic Day', 'holiday',
+   (current_date + interval '9 days')::date, (current_date + interval '9 days')::date,
+   seed.seed_uid('admin'));
+
+-- Section-scoped, declared by that section's own rep. This is what "a course
+-- rep can set a day as a holiday" actually means (ADR-012): their section, not
+-- the university.
+insert into public.academic_calendar_events (institution_id, semester_id, class_section_id, title, event_type, starts_on, ends_on, declared_by, reason)
+select
+  seed.seed_uid('inst'), seed.seed_uid('sem_now'), seed.seed_uid('section_3'),
+  'No class Friday', 'holiday',
+  (current_date + interval '4 days')::date, (current_date + interval '4 days')::date,
+  a.user_id, 'Lecturer away at a conference.'
+from public.course_rep_assignments a
+where a.class_section_id = seed.seed_uid('section_3')
+limit 1;
+
+-- A past emergency, so the register grid and the reports have one to render.
+-- Its sessions and records are voided further down, where the history is built.
+insert into public.academic_calendar_events (institution_id, semester_id, class_section_id, title, event_type, starts_on, ends_on, declared_by, declared_at, reason)
+select
+  seed.seed_uid('inst'), seed.seed_uid('sem_now'), seed.seed_uid('section_4'),
+  'Campus closed: flooding', 'emergency',
+  (current_date - interval '2 weeks')::date, (current_date - interval '2 weeks')::date,
+  a.user_id, (current_date - interval '2 weeks')::timestamptz + interval '7 hours',
+  'Water in the LT block; students told to stay away.'
+from public.course_rep_assignments a
+where a.class_section_id = seed.seed_uid('section_4')
+limit 1;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Schedule rules — Mon/Thu, so generate-sessions has something to expand
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -471,6 +505,36 @@ select e.student_id, seed.seed_uid('sess_cancelled'), seed.seed_uid('section_1')
 from public.enrollments e
 where e.class_section_id = seed.seed_uid('section_1')
 on conflict (student_id, session_id) do nothing;
+
+-- Apply the seeded emergency: cancel that day's sessions in the section and
+-- void every record on them, exactly as declare_calendar_event() would.
+--
+-- Done by hand here rather than by calling the function, because the function
+-- refuses a backdated declaration — correctly. The seed is writing history that
+-- already happened, which is service_role's job and nobody else's.
+with ev as (
+  select id, class_section_id, starts_on
+  from public.academic_calendar_events
+  where event_type = 'emergency'
+  limit 1
+),
+cancelled_sessions as (
+  update public.attendance_sessions s
+  set status = 'cancelled',
+      cancelled_at = ev.starts_on::timestamptz + interval '7 hours',
+      cancelled_by = (select declared_by from public.academic_calendar_events where id = ev.id),
+      cancelled_reason = 'Campus closed: flooding',
+      cancelled_by_event_id = ev.id
+  from ev
+  where s.class_section_id = ev.class_section_id
+    and s.session_date = ev.starts_on
+    and s.status <> 'cancelled'
+  returning s.id
+)
+update public.attendance_records r
+set status = 'cancelled'
+from cancelled_sessions cs
+where r.session_id = cs.id;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Right now — three open sessions with a live queue (§13)

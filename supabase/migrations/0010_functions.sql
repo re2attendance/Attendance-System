@@ -146,13 +146,40 @@ create trigger attendance_records_sync_section
 -- service_role is exempt: seeds and backfills legitimately write history, and
 -- they are not reachable from a browser (lib/supabase/admin.ts is ESLint-fenced
 -- to jobs/* and app/api/cron/*).
+-- INSERT and UPDATE are handled differently, and the difference is the whole
+-- correctness of the timing model.
+--
+-- The first version of this stamped now() onto submitted_at whenever it was
+-- non-null, on insert AND update. Every approval therefore rewrote submitted_at
+-- to the approval time — verified: a record submitted at 10:49 and approved at
+-- 11:13 came back reading 11:13.
+--
+-- That is the precise injustice §6.5 exists to prevent. deriveStatus anchors on
+-- submitted_at so a slow queue cannot make an on-time student late; this fed it
+-- the approval time and made every late approval a late student. The rules
+-- engine was correct and its input was corrupt. 74 RLS tests missed it because
+-- they all set `status` by hand instead of deriving it.
+--
+-- So:
+--   INSERT — stamp server time. The client's value, if any, is discarded.
+--   UPDATE — submitted_at is IMMUTABLE. It is a fact about a moment that has
+--            already happened, and nothing that happens later gets to move it.
+--            The decision stamps are refreshed only when the decision itself
+--            changes, so a status-only update (close_session's sweep, an
+--            emergency voiding a day) leaves the decision history intact.
 create or replace function public.attendance_records_force_server_time()
 returns trigger
 language plpgsql
 set search_path = public, pg_temp
 as $$
 begin
-  if (select auth.uid()) is not null then
+  -- service_role (auth.uid() is null) writes history legitimately: seeds,
+  -- backfills, imports. It is not reachable from a browser.
+  if (select auth.uid()) is null then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
     if new.submitted_at is not null then
       new.submitted_at := now();
     end if;
@@ -162,7 +189,25 @@ begin
     if new.permission_decided_at is not null then
       new.permission_decided_at := now();
     end if;
+    return new;
   end if;
+
+  -- UPDATE.
+  new.submitted_at := old.submitted_at;
+
+  if new.decision is distinct from old.decision then
+    new.decided_at := case when new.decision is null then null else now() end;
+  else
+    new.decided_at := old.decided_at;
+  end if;
+
+  if new.permission_decision is distinct from old.permission_decision then
+    new.permission_decided_at :=
+      case when new.permission_decision is null then null else now() end;
+  else
+    new.permission_decided_at := old.permission_decided_at;
+  end if;
+
   return new;
 end;
 $$;
@@ -390,6 +435,33 @@ $$;
 -- It is ALSO here because §7 lists "submission before session opened" as an
 -- anomaly to catch, and an action-layer check is a check the database is not
 -- making.
+-- Is this day declared a holiday, break, exam period or emergency for this
+-- section? True if either an institution-wide declaration or one scoped to this
+-- section covers the date.
+create or replace function public.auth_day_is_declared(
+  p_class_section_id uuid,
+  p_date date
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1
+    from public.academic_calendar_events e
+    join public.class_sections cs on cs.id = p_class_section_id
+    where p_date between e.starts_on and e.ends_on
+      and e.institution_id = cs.institution_id
+      and (
+        -- Institution-wide, or scoped to exactly this section.
+        e.class_section_id is null
+        or e.class_section_id = p_class_section_id
+      )
+  );
+$$;
+
 create or replace function public.auth_session_accepts_submissions(p_session_id uuid)
 returns boolean
 language sql
@@ -402,6 +474,16 @@ as $$
     from public.attendance_sessions s
     where s.id = p_session_id
       and s.status = 'open'
+      -- Belt and braces. Declaring a holiday cancels that day's sessions, so a
+      -- cancelled session already fails the status check above and this is
+      -- redundant for the normal path.
+      --
+      -- It is here for the path that is not normal: a session created on an
+      -- already-declared day, or one somehow reopened. The requirement is
+      -- "students should not submit any attendance on a holiday", and that
+      -- should be true because of the DAY, not merely because of a side effect
+      -- that ran once when the day was declared.
+      and not public.auth_day_is_declared(s.class_section_id, s.session_date)
   );
 $$;
 
@@ -555,3 +637,218 @@ $$;
 
 revoke all on function public.close_session(uuid) from public;
 grant execute on function public.close_session(uuid) to authenticated, service_role;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- declare_calendar_event() — holidays and impromptu emergencies
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- "Today", in the institution's timezone.
+--
+-- Not the server's date and emphatically not the client's. A student in Accra
+-- and a server in Virginia disagree about what day it is for five hours every
+-- night, and "an emergency may only be declared on the day itself" is a rule
+-- about the university's day, not UTC's. §2 Q3: one institutional timezone, all
+-- logic server-side.
+create or replace function public.institution_today(p_institution_id uuid)
+returns date
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select (now() at time zone i.timezone)::date
+  from public.institutions i
+  where i.id = p_institution_id;
+$$;
+
+-- Declares a holiday, break, exam period, or impromptu emergency, and applies
+-- it: every session in scope on those dates is cancelled, and every record on
+-- those sessions is voided — INCLUDING ones a rep already approved.
+--
+-- Scope (see the note on academic_calendar_events):
+--   p_class_section_id null → institution-wide. Admin only.
+--   p_class_section_id set  → that section. Rep / instructor / admin.
+--
+-- Date rules, enforced here because a CHECK constraint cannot see the clock
+-- (current_date is not immutable, so it cannot appear in one):
+--   emergency          → must be TODAY, exactly. Not yesterday, not tomorrow.
+--   holiday/break/exam → today or later. Never backdated.
+--
+-- Why nothing may be backdated: a retroactive declaration is indistinguishable
+-- from erasing a day of absences. That is the only reason anyone would want
+-- one, so the database does not offer it. Correcting a genuine past mistake is
+-- an instructor override on the affected records, which is audited per record
+-- and cannot be done in one click for 300 people.
+create or replace function public.declare_calendar_event(
+  p_event_type public.calendar_event_type,
+  p_starts_on date,
+  p_ends_on date,
+  p_title text,
+  p_class_section_id uuid default null,
+  p_reason text default null
+)
+returns table (event_id uuid, sessions_cancelled integer, records_voided integer)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_institution uuid;
+  v_today date;
+  v_event_id uuid;
+  v_sessions integer := 0;
+  v_records integer := 0;
+  v_actor uuid := (select auth.uid());
+begin
+  if p_starts_on is null or p_ends_on is null or p_ends_on < p_starts_on then
+    raise exception 'declare_calendar_event: invalid date range % .. %',
+      p_starts_on, p_ends_on
+      using errcode = 'check_violation';
+  end if;
+
+  if p_title is null or length(trim(p_title)) = 0 then
+    raise exception 'declare_calendar_event: a title is required'
+      using errcode = 'check_violation';
+  end if;
+
+  -- ── scope + authorisation ────────────────────────────────────────────────
+  if p_class_section_id is null then
+    -- Institution-wide. This shuts the university for the day, so it is admin's
+    -- alone: a course rep is a student, and no student closes a university.
+    if not public.auth_is_admin() then
+      raise exception
+        'declare_calendar_event: an institution-wide % may only be declared by an admin. To declare it for a section you administer, pass that section.',
+        p_event_type
+        using errcode = 'insufficient_privilege';
+    end if;
+
+    select p.institution_id into v_institution
+    from public.profiles p where p.id = v_actor;
+  else
+    select cs.institution_id into v_institution
+    from public.class_sections cs where cs.id = p_class_section_id;
+
+    if v_institution is null then
+      raise exception 'declare_calendar_event: section % does not exist', p_class_section_id
+        using errcode = 'foreign_key_violation';
+    end if;
+
+    -- auth_can_administer_section carries the appointment-period check, so an
+    -- expired or revoked rep cannot declare anything.
+    if not public.auth_can_administer_section(p_class_section_id) then
+      raise exception 'declare_calendar_event: not authorised for section %',
+        p_class_section_id
+        using errcode = 'insufficient_privilege';
+    end if;
+  end if;
+
+  if v_institution is null then
+    raise exception 'declare_calendar_event: cannot resolve the institution'
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  v_today := public.institution_today(v_institution);
+
+  -- ── date rules ───────────────────────────────────────────────────────────
+  if p_event_type = 'emergency' then
+    if p_starts_on <> v_today or p_ends_on <> v_today then
+      raise exception
+        'declare_calendar_event: an emergency may only be declared for today (% in this institution''s timezone), not % .. %. It is an impromptu event and is pronounced as it happens.',
+        v_today, p_starts_on, p_ends_on
+        using errcode = 'check_violation';
+    end if;
+  elsif p_starts_on < v_today then
+    raise exception
+      'declare_calendar_event: a % cannot be backdated (% is before today, %). A backdated declaration is indistinguishable from erasing that day''s absences; correct individual records with an override instead.',
+      p_event_type, p_starts_on, v_today
+      using errcode = 'check_violation';
+  end if;
+
+  -- ── declare ──────────────────────────────────────────────────────────────
+  insert into public.academic_calendar_events (
+    institution_id, class_section_id, title, event_type,
+    starts_on, ends_on, declared_by, reason
+  ) values (
+    v_institution, p_class_section_id, trim(p_title), p_event_type,
+    p_starts_on, p_ends_on, v_actor, p_reason
+  )
+  returning id into v_event_id;
+
+  -- ── apply: cancel the sessions ───────────────────────────────────────────
+  with cancelled as (
+    update public.attendance_sessions s
+    set status = 'cancelled',
+        cancelled_at = now(),
+        cancelled_by = v_actor,
+        cancelled_reason = trim(p_title),
+        cancelled_by_event_id = v_event_id
+    where s.session_date between p_starts_on and p_ends_on
+      and s.status <> 'cancelled'
+      and (
+        p_class_section_id is not null and s.class_section_id = p_class_section_id
+        or p_class_section_id is null and exists (
+          select 1 from public.class_sections cs
+          where cs.id = s.class_section_id and cs.institution_id = v_institution
+        )
+      )
+    returning s.id
+  )
+  select count(*)::integer into v_sessions from cancelled;
+
+  -- ── apply: void the records, approved ones included ──────────────────────
+  --
+  -- This is the part the requirement turns on. A student may have reported
+  -- present this morning and had it approved before the emergency was called;
+  -- the class still did not happen, so the record cannot say it did.
+  --
+  -- `decision` and `decided_by` are deliberately NOT cleared. The rep did
+  -- approve it, and that remains true — deleting the fact would make the audit
+  -- trail lie about what people did. Only the status changes, and the
+  -- force_server_time trigger preserves the decision stamps on a status-only
+  -- update.
+  --
+  -- deriveStatus agrees without being told: a cancelled session returns
+  -- 'cancelled' regardless of any decision on the record. The database and the
+  -- rules engine reach the same answer by different routes, which is the
+  -- property that keeps them honest.
+  with voided as (
+    update public.attendance_records r
+    set status = 'cancelled'
+    from public.attendance_sessions s
+    where r.session_id = s.id
+      and s.cancelled_by_event_id = v_event_id
+      and r.status <> 'cancelled'
+    returning r.id
+  )
+  select count(*)::integer into v_records from voided;
+
+  insert into public.audit_log (
+    actor_id, action, entity_type, entity_id, after
+  ) values (
+    v_actor,
+    'calendar.declared.' || p_event_type,
+    'academic_calendar_event',
+    v_event_id,
+    jsonb_build_object(
+      'event_type', p_event_type,
+      'title', trim(p_title),
+      'starts_on', p_starts_on,
+      'ends_on', p_ends_on,
+      'scope', case when p_class_section_id is null then 'institution' else 'class_section' end,
+      'class_section_id', p_class_section_id,
+      'sessions_cancelled', v_sessions,
+      'records_voided', v_records,
+      'reason', p_reason
+    )
+  );
+
+  return query select v_event_id, v_sessions, v_records;
+end;
+$$;
+
+revoke all on function public.declare_calendar_event(
+  public.calendar_event_type, date, date, text, uuid, text
+) from public;
+grant execute on function public.declare_calendar_event(
+  public.calendar_event_type, date, date, text, uuid, text
+) to authenticated, service_role;

@@ -106,11 +106,36 @@ The rule underneath: **silence from the student is absence; silence from the rep
 
 The exploit worth naming: a rep who never verifies leaves their whole section resting on a small denominator. That is left to detection, not prevention — `unverified_count` on every summary and the rep-activity report (§10) make it loud. A control that punished students to prevent rep misconduct would be solving the wrong problem with the wrong person's grade.
 
+### 7b. Declared days: holidays and impromptu emergencies (ADR-012)
+
+`academic_calendar_events` is where a day gets taken off the calendar, and **scope** is its load-bearing column:
+
+- `class_section_id is null` → institution-wide. **Admin only.**
+- `class_section_id is set` → that section. Its rep (in-period), instructor, or admin.
+
+A course rep is a student with a scoped grant. "Reps can declare a holiday" cannot mean an undergraduate closes the university — it means they can declare it for the section they run. Reps get `holiday` and `emergency`; `break` and `exam_period` are institutional facts and stay with admin.
+
+`declare_calendar_event()` is the only door. It authorises by scope, enforces the date rules, cancels every session in scope on those dates, and voids every record on them — **including ones a rep already approved**, which is the requirement's whole point. The approval is *not* erased: `decision` and `decided_by` stay, and only `status` changes. The rep did approve it, and the audit trail must not lie about what people did.
+
+**Date rules**, enforced in the function because `current_date` is not immutable and cannot appear in a CHECK:
+
+- **emergency** — today only, in the institution's timezone, single day. It is impromptu; it is pronounced as it happens.
+- **holiday / break / exam** — today or later.
+- **Nothing is backdated.** A retroactive declaration is indistinguishable from erasing a day's absences, which is the only reason to want one. Past corrections are per-record instructor overrides.
+
+`deriveStatus` needed no change: a cancelled session already returns `cancelled` regardless of any decision. The database and the rules engine reach the same answer by different routes.
+
 ### 8. Server time is authoritative, and a default is not enough
 
 `submitted_at` is the single input `deriveStatus` anchors on, so a client that can set it can choose its own status. A column default only applies when the client *omits* the column — a client that supplies it overrides silently.
 
 So `attendance_records_force_server_time` (0010) **overwrites** it for anyone holding a user JWT. A lying client is corrected, not rejected. `service_role` is exempt: seeds and backfills legitimately write history, and they are not reachable from a browser.
+
+**INSERT and UPDATE are handled differently, and the difference is the whole correctness of the timing model.** The first version stamped `now()` whenever `submitted_at` was non-null, on insert *and* update — so every approval rewrote `submitted_at` to the approval time. Verified: a record submitted at 10:49 and approved at 11:13 came back reading 11:13.
+
+That is the precise injustice §6.5 exists to prevent. The rules engine anchors on `submitted_at` so a slow queue cannot make an on-time student late; this fed it the approval time and made every slow approval a late student. The engine was correct and its input was corrupt. 74 RLS tests missed it because they all set `status` by hand instead of deriving it.
+
+Now: **INSERT stamps server time; UPDATE cannot move `submitted_at` at all.** It is a fact about a moment that has already passed, and nothing later gets to change it. Decision stamps refresh only when the decision itself changes, so a status-only update — `close_session`'s sweep, an emergency voiding a day — leaves the decision history intact. There is a regression test, and it has been fired: reintroduce the old trigger and it fails.
 
 ### 9. Percentages are maintained on write
 

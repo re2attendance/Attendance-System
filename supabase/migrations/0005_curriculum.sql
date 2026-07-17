@@ -121,3 +121,27 @@ create table public.course_rep_assignments (
 -- historical fact. Overlapping ACTIVE grants for the same user+section are
 -- prevented by an exclusion constraint in 0012 instead, which allows the
 -- history while forbidding the ambiguity.
+
+-- The two FKs deferred from 0003. academic_calendar_events is org structure and
+-- is created early, but a section-scoped declaration points forward at the
+-- curriculum (here) and at the person who declared it (profiles, 0004). Same
+-- shape as the rules-snapshot FK deferred from 0006 to 0008.
+
+-- on delete cascade: a section-scoped holiday is a fact about that section. If
+-- the section is deleted the declaration has nothing left to mean. Contrast
+-- attendance_sessions.cancelled_by_event_id (0006), which is `on delete set
+-- null` — a session that WAS cancelled by a holiday stays cancelled even if the
+-- declaration is later withdrawn, because the class genuinely did not happen.
+alter table public.academic_calendar_events
+  add constraint academic_calendar_events_class_section_id_fkey
+  foreign key (class_section_id)
+  references public.class_sections (id)
+  on delete cascade;
+
+-- on delete set null: the declaration outlives the declarer's account. Who
+-- called the emergency also lives in the audit log, which nothing can delete.
+alter table public.academic_calendar_events
+  add constraint academic_calendar_events_declared_by_fkey
+  foreign key (declared_by)
+  references public.profiles (id)
+  on delete set null;

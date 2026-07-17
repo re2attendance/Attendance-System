@@ -66,6 +66,19 @@ create table public.attendance_sessions (
   cancelled_by uuid references public.profiles (id) on delete set null,
   cancelled_reason text,
 
+  -- Which declaration killed this session, when one did. Null means somebody
+  -- cancelled it by hand (lecturer ill, room flooded) and cancelled_reason says
+  -- why.
+  --
+  -- This is why "holiday" and "emergency" are NOT members of attendance_status.
+  -- A cancelled session is a cancelled session: the student's record means the
+  -- same thing either way — this doesn't count, you are not penalised. WHY it
+  -- was cancelled is a fact about the SESSION, not about the student, and 300
+  -- identical copies of "emergency" stamped across 300 records is a
+  -- denormalisation of a fact that has exactly one owner. Reports read it from
+  -- here; the chip renders the word by joining, not by storing. See ADR-012.
+  cancelled_by_event_id uuid references public.academic_calendar_events (id) on delete set null,
+
   generated_from_schedule_rule_id uuid references public.schedule_rules (id) on delete set null,
 
   -- §7 layer 1: rotating 6-digit code, regenerated every 30s, validated

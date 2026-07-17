@@ -36,39 +36,65 @@ export type Database = {
     Tables: {
       academic_calendar_events: {
         Row: {
+          class_section_id: string | null
           created_at: string
+          declared_at: string
+          declared_by: string | null
           ends_on: string
           event_type: Database["public"]["Enums"]["calendar_event_type"]
           id: string
           institution_id: string
+          reason: string | null
           semester_id: string | null
           starts_on: string
           title: string
           updated_at: string
         }
         Insert: {
+          class_section_id?: string | null
           created_at?: string
+          declared_at?: string
+          declared_by?: string | null
           ends_on: string
           event_type: Database["public"]["Enums"]["calendar_event_type"]
           id?: string
           institution_id: string
+          reason?: string | null
           semester_id?: string | null
           starts_on: string
           title: string
           updated_at?: string
         }
         Update: {
+          class_section_id?: string | null
           created_at?: string
+          declared_at?: string
+          declared_by?: string | null
           ends_on?: string
           event_type?: Database["public"]["Enums"]["calendar_event_type"]
           id?: string
           institution_id?: string
+          reason?: string | null
           semester_id?: string | null
           starts_on?: string
           title?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "academic_calendar_events_class_section_id_fkey"
+            columns: ["class_section_id"]
+            isOneToOne: false
+            referencedRelation: "class_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "academic_calendar_events_declared_by_fkey"
+            columns: ["declared_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "academic_calendar_events_institution_id_fkey"
             columns: ["institution_id"]
@@ -500,6 +526,7 @@ export type Database = {
         Row: {
           cancelled_at: string | null
           cancelled_by: string | null
+          cancelled_by_event_id: string | null
           cancelled_reason: string | null
           class_section_id: string
           closed_at: string | null
@@ -526,6 +553,7 @@ export type Database = {
         Insert: {
           cancelled_at?: string | null
           cancelled_by?: string | null
+          cancelled_by_event_id?: string | null
           cancelled_reason?: string | null
           class_section_id: string
           closed_at?: string | null
@@ -552,6 +580,7 @@ export type Database = {
         Update: {
           cancelled_at?: string | null
           cancelled_by?: string | null
+          cancelled_by_event_id?: string | null
           cancelled_reason?: string | null
           class_section_id?: string
           closed_at?: string | null
@@ -576,6 +605,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "attendance_sessions_cancelled_by_event_id_fkey"
+            columns: ["cancelled_by_event_id"]
+            isOneToOne: false
+            referencedRelation: "academic_calendar_events"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "attendance_sessions_cancelled_by_fkey"
             columns: ["cancelled_by"]
@@ -1746,6 +1782,10 @@ export type Database = {
         Args: { p_section_id: string }
         Returns: boolean
       }
+      auth_day_is_declared: {
+        Args: { p_class_section_id: string; p_date: string }
+        Returns: boolean
+      }
       auth_has_role: {
         Args: {
           p_role: Database["public"]["Enums"]["app_role"]
@@ -1782,6 +1822,22 @@ export type Database = {
           pending_swept: number
         }[]
       }
+      declare_calendar_event: {
+        Args: {
+          p_class_section_id?: string
+          p_ends_on: string
+          p_event_type: Database["public"]["Enums"]["calendar_event_type"]
+          p_reason?: string
+          p_starts_on: string
+          p_title: string
+        }
+        Returns: {
+          event_id: string
+          records_voided: number
+          sessions_cancelled: number
+        }[]
+      }
+      institution_today: { Args: { p_institution_id: string }; Returns: string }
       log_audit: {
         Args: {
           p_action: string
@@ -1814,7 +1870,7 @@ export type Database = {
         | "excused"
         | "cancelled"
       beyond_late_window: "late" | "absent"
-      calendar_event_type: "holiday" | "break" | "exam_period"
+      calendar_event_type: "holiday" | "break" | "exam_period" | "emergency"
       dispute_status: "open" | "responded" | "resolved" | "rejected"
       enrollment_status: "enrolled" | "dropped" | "withdrawn"
       job_run_status: "running" | "succeeded" | "failed"
@@ -1977,7 +2033,7 @@ export const Constants = {
         "cancelled",
       ],
       beyond_late_window: ["late", "absent"],
-      calendar_event_type: ["holiday", "break", "exam_period"],
+      calendar_event_type: ["holiday", "break", "exam_period", "emergency"],
       dispute_status: ["open", "responded", "resolved", "rejected"],
       enrollment_status: ["enrolled", "dropped", "withdrawn"],
       job_run_status: ["running", "succeeded", "failed"],

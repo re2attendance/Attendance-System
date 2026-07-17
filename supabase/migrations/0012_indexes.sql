@@ -23,6 +23,15 @@ create index semesters_institution_id_idx on public.semesters (institution_id);
 create index semesters_academic_year_id_idx on public.semesters (academic_year_id);
 create index calendar_events_institution_id_idx on public.academic_calendar_events (institution_id);
 create index calendar_events_semester_id_idx on public.academic_calendar_events (semester_id);
+create index calendar_events_class_section_id_idx on public.academic_calendar_events (class_section_id);
+create index calendar_events_declared_by_idx on public.academic_calendar_events (declared_by);
+
+-- auth_day_is_declared() runs on every submission attempt — it is inside
+-- auth_session_accepts_submissions, which is inside the records_insert_own
+-- policy. That is the 09:00 path where 300 students tap at once, so this
+-- lookup has to be an index hit.
+create index calendar_events_scope_dates_idx
+  on public.academic_calendar_events (institution_id, starts_on, ends_on);
 
 create index profiles_institution_id_idx on public.profiles (institution_id);
 create index profiles_department_id_idx on public.profiles (department_id);
@@ -57,6 +66,7 @@ create index sessions_closed_by_idx on public.attendance_sessions (closed_by);
 create index sessions_cancelled_by_idx on public.attendance_sessions (cancelled_by);
 create index sessions_schedule_rule_id_idx on public.attendance_sessions (generated_from_schedule_rule_id);
 create index sessions_rules_snapshot_id_idx on public.attendance_sessions (rules_snapshot_id);
+create index sessions_cancelled_by_event_id_idx on public.attendance_sessions (cancelled_by_event_id);
 
 create index session_makeups_makeup_session_id_idx on public.session_makeups (makeup_session_id);
 

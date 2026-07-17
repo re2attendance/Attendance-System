@@ -99,16 +99,63 @@ create table public.semesters (
 );
 
 -- §5: sessions must not be auto-generated on these. generate-sessions consults
--- this table before writing anything.
+-- this table before writing anything, and no session on one of these days
+-- accepts a submission.
+--
+-- SCOPE is the load-bearing column here, and the reason is worth stating:
+--
+--   class_section_id IS NULL  → institution-wide. ADMIN ONLY.
+--   class_section_id IS SET   → one section. The section's rep, its instructor,
+--                               or an admin.
+--
+-- A course rep is a student with a scoped grant (§4). "Reps can declare a
+-- holiday" cannot mean a student can shut the university — that would be the
+-- largest privilege escalation in the product, available to ~12 undergraduates.
+-- It means a rep can declare it for the section they actually administer, which
+-- is the thing they were appointed to run. The scope column is what keeps those
+-- two readings apart, and RLS in 0011 enforces the split.
+--
+-- Declared days are not deletable by their author, only by an admin: a rep who
+-- can declare an emergency and then remove the evidence has a tool, not a
+-- responsibility. See ADR-012.
 create table public.academic_calendar_events (
   id uuid primary key default gen_random_uuid(),
   institution_id uuid not null references public.institutions (id) on delete restrict,
   semester_id uuid references public.semesters (id) on delete cascade,
+
+  -- Null = the whole institution. See the scope note above.
+  --
+  -- The FK is added in 0005, where class_sections is created — the academic
+  -- calendar is org structure and comes first, but a section-scoped declaration
+  -- points forward at the curriculum. Same shape as the rules-snapshot FK
+  -- deferred from 0006 to 0008: one of two mutually-referencing tables has to
+  -- be second.
+  class_section_id uuid,
+
   title text not null,
   event_type public.calendar_event_type not null,
   starts_on date not null,
   ends_on date not null,
+
+  -- Who pronounced it and when. An emergency voids a day of academic records
+  -- for everyone in scope, including records a rep had already approved — that
+  -- is not an action that gets to be anonymous.
+  --
+  -- FK added in 0005, with class_section_id's — profiles arrives in 0004.
+  declared_by uuid,
+  declared_at timestamptz not null default now(),
+  reason text,
+
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint calendar_events_dates_ordered check (ends_on >= starts_on)
+
+  constraint calendar_events_dates_ordered check (ends_on >= starts_on),
+
+  -- An emergency is one day. It is declared as it happens, so a multi-day
+  -- emergency is several declarations — one per day, each made on that day.
+  -- Requiring that is what stops "the whole of next week is an emergency" from
+  -- being one click.
+  constraint calendar_events_emergency_single_day check (
+    event_type <> 'emergency' or starts_on = ends_on
+  )
 );

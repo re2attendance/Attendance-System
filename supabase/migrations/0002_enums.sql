@@ -112,11 +112,25 @@ create type public.rule_scope as enum (
 -- a branch.
 create type public.beyond_late_window as enum ('late', 'absent');
 
--- Sessions must not be auto-generated onto these (§5).
+-- Sessions must not be auto-generated onto these (§5), and no session on one of
+-- these days accepts a submission.
+--
+-- 'emergency' is the impromptu one: campus shuts, nobody can come in. It
+-- differs from 'holiday' in exactly two ways, and both are enforced rather than
+-- documented (see declare_calendar_event in 0010):
+--
+--   · it may only be declared FOR TODAY — never in advance, never backdated
+--   · it applies to a single day
+--
+-- A holiday is planned, so it is declared ahead. An emergency is not, so it is
+-- declared as it happens. Neither may be backdated: a retroactive declaration
+-- is indistinguishable from erasing a day's absences, which is the whole reason
+-- someone would want one.
 create type public.calendar_event_type as enum (
   'holiday',
   'break',
-  'exam_period'
+  'exam_period',
+  'emergency'
 );
 
 create type public.notification_channel as enum ('email', 'in_app', 'off');

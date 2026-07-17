@@ -335,3 +335,67 @@ Type is the dangerous one, and it is dangerous in the opposite direction from wh
 - The mechanism is a **test**, not the compiler. It runs in `pnpm gate`, so the practical effect for anyone adding a shadcn component is the same — the gate stops them and names the line. It is coarse (regex over source, comments stripped) and deliberately under-reaches on bare `rounded`, which matched the English word in a test title. A guard that cries wolf gets deleted.
 - Each of the three assertions was **verified by pasting a real violation and watching it fail**, then removing it and watching it pass. That is the same discipline that caught the ESLint `mode: "file"` bug, which also looked correct and enforced nothing. Two for two: both times the config was written, plausible, and inert.
 - **The wider lesson, recorded because it will recur:** "this cannot happen because the tooling prevents it" is a claim, and claims about tooling need the same proof as claims about code. Every remaining guard in this repo has now been fired at least once on purpose.
+
+---
+
+## ADR-012 — Holidays and impromptu emergencies: scope, timing, and who may pronounce them
+
+**Date:** 2026-07-17 · **Status:** Accepted · **Phase:** 2 (addendum, before Phase 3)
+
+### Context
+
+Requested: a course rep or admin can mark a day a holiday, that day records as a holiday, and students cannot submit attendance on it. Separately, a rep or admin can pronounce a day an impromptu emergency — **on that day only** — and any attendance already submitted and approved is reverted and counted as the emergency.
+
+Three things in that needed deciding rather than typing.
+
+### Decision 1 — "a course rep can declare a holiday" means *for their section*
+
+A course rep is a student with a scoped grant (§4). Read literally, "reps can set a day as a holiday" would let any of ~12 undergraduates close the university and void a day of records for 10,000 people. That is the largest privilege escalation available in the product, and it is not what anyone means by the sentence.
+
+So `academic_calendar_events.class_section_id` carries the scope:
+
+- **null → institution-wide.** Admin only. Enforced in `declare_calendar_event()` and again by RLS.
+- **set → one section.** Its rep (within their appointment period), its instructor, or an admin.
+
+A rep declaring "no class Friday" for the section they run is exactly the authority they were appointed to have. Reps also get `holiday` and `emergency` only — a `break` or an `exam_period` is an institutional fact about the term, not a day-to-day call, so those stay admin's.
+
+If you actually want reps to be able to close the whole institution, that is a one-line change and a bad idea; say so and I'll make it.
+
+### Decision 2 — nothing may be backdated, and an emergency is today only
+
+- **emergency** → must be **today**, exactly, and a single day. It is impromptu; it is pronounced as it happens.
+- **holiday / break / exam period** → today or later. Planned things are declared ahead.
+
+"Today" is `now() at time zone institutions.timezone`, not the server's date — a server in Virginia and a campus in Accra disagree about what day it is for five hours a night, and this is a rule about the university's day.
+
+Neither can be backdated, and that is the load-bearing half. **A retroactive declaration is indistinguishable from erasing a day's absences** — it is the only reason anyone would want one. The requirement's "on that particular day only" says this for emergencies; it applies with equal force to holidays, so both are refused. Correcting a genuine past mistake is an instructor override on the affected records: audited per record, and not available as one click for 300 people.
+
+Enforced in the function rather than a CHECK constraint because `current_date` is not immutable and cannot appear in one.
+
+### Decision 3 — the reason lives on the session, not on 300 records
+
+"Counted as impromptu occurrence" does **not** become a new `attendance_status` member. Records on a declared day become `cancelled`, and the session carries `cancelled_by_event_id` pointing at the declaration.
+
+The line this follows is the one ADR-010 drew: **facts about the session live on the session; facts about the student live on the record.** Whether a class was cancelled for a holiday, an emergency, or a flooded lecture theatre does not change what the student's record *means* — this doesn't count, you are not penalised. Stamping "emergency" onto 300 identical records denormalises a fact that has exactly one owner.
+
+The requirement is still met: the record is distinguishable as an emergency, by reading the session that caused it. Reports join; the chip renders the word. The enum stays at ten members rather than growing one per reason anyone ever invents.
+
+### Consequences
+
+- **`deriveStatus` needed no change.** A cancelled session already returns `cancelled` regardless of any decision on the record. The database sets the status directly and the rules engine reaches the same answer independently — two routes, one result, which is the property that keeps them honest.
+- **The approval is not erased.** Voiding sets `status` only; `decision` and `decided_by` stay. The rep did approve it, and deleting that would make the audit trail lie about what people did.
+- **Declaring is insert-only for reps.** No update or delete policy: a rep who can pronounce an emergency and then quietly withdraw it has a tool, not a responsibility. Admin can withdraw; the audit entry survives either way.
+- **Submission is blocked by the DAY, not by the side effect.** `auth_session_accepts_submissions()` checks `auth_day_is_declared()` as well as the session status. Declaring already cancels that day's sessions, so this is redundant on the normal path — it is there for the session created on an already-declared day, because the requirement is about the day.
+
+### The abuse vector, stated plainly
+
+**A rep can pronounce an emergency on a day they were personally absent, and their own absence is voided along with everyone else's.** The same-day rule stops them cherry-picking last Tuesday, and the declaration is audited against them by name — but on the day itself, this is real.
+
+What stands against it: it is public (300 classmates notice a fake emergency), it is audited with a count of what it voided, an instructor can reverse it, and a rep cannot delete the evidence. What does **not** stand against it: any automated check, because the system cannot tell a real flood from a claimed one.
+
+Two mitigations worth considering, both deferred and tracked:
+
+1. **Notify the instructor and admin the moment a rep declares an emergency** (Phase 9). Cheap, and turns a silent action into a witnessed one. This is the one I'd do.
+2. **Require instructor confirmation within N hours or the declaration lapses.** Stronger, but a rep declaring an emergency during an actual emergency may not get a reply, and the failure mode is students marked absent for a day the campus was shut.
+
+Raised in the Phase 2 addendum report rather than decided unilaterally: this is a policy call about how much a university trusts its course reps, and that is not mine to make.

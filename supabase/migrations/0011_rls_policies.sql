@@ -88,10 +88,38 @@ create policy semesters_read on public.semesters
 create policy semesters_admin on public.semesters
   for all to authenticated using (public.auth_is_admin()) with check (public.auth_is_admin());
 
+-- Readable by everyone: a student needs to know today is a holiday, and a
+-- holiday nobody can see is a holiday nobody can rely on.
 create policy calendar_events_read on public.academic_calendar_events
   for select to authenticated using (true);
+
 create policy calendar_events_admin on public.academic_calendar_events
   for all to authenticated using (public.auth_is_admin()) with check (public.auth_is_admin());
+
+-- A rep or instructor may declare for a section they administer — and ONLY for
+-- that section.
+--
+-- The `class_section_id is not null` clause is the whole rule. Without it, "a
+-- rep can declare a holiday" means an undergraduate can close the university
+-- for everybody, which is not what anyone means by it. A rep runs one section;
+-- they may declare a day off for that section, and nothing wider.
+-- auth_can_administer_section carries the appointment-period check, so an
+-- expired or revoked rep declares nothing.
+--
+-- Insert only, deliberately. There is no update or delete policy here for
+-- non-admins: a rep who can pronounce an emergency and then quietly remove it
+-- has a tool rather than a responsibility, and the day it voided 300 records
+-- would vanish with it. Withdrawing a declaration is an admin action, and the
+-- original stays in the audit log either way. See ADR-012.
+create policy calendar_events_declare_section on public.academic_calendar_events
+  for insert to authenticated
+  with check (
+    class_section_id is not null
+    and public.auth_can_administer_section(class_section_id)
+    -- A break or an exam period is an institutional fact about the term, not a
+    -- day-to-day call about one section. Reps get the two that are theirs.
+    and event_type in ('holiday', 'emergency')
+  );
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- profiles
