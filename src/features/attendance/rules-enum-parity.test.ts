@@ -50,6 +50,7 @@ describe("rules library ↔ database enum parity", () => {
   const DB_STATUSES: DbAttendanceStatus[] = [
     "pending_verification",
     "pending_permission_review",
+    "unverified",
     "present",
     "late",
     "permission_granted",
@@ -62,6 +63,7 @@ describe("rules library ↔ database enum parity", () => {
   const RULES_STATUSES: RulesAttendanceStatus[] = [
     "pending_verification",
     "pending_permission_review",
+    "unverified",
     "present",
     "late",
     "permission_granted",
@@ -75,9 +77,10 @@ describe("rules library ↔ database enum parity", () => {
     expect(new Set(RULES_STATUSES)).toEqual(new Set(DB_STATUSES));
   });
 
-  it("the enum has exactly nine members", () => {
+  it("the enum has exactly ten members", () => {
     // A tripwire for a status added to the migration without anyone revisiting
-    // deriveStatus, the chip map, or the summary table's denominator.
-    expect(DB_STATUSES).toHaveLength(9);
+    // deriveStatus, the chip map, or the summary table's denominator. It fired
+    // for real when ADR-010 added `unverified`, which is the point.
+    expect(DB_STATUSES).toHaveLength(10);
   });
 });

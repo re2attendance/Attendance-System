@@ -117,3 +117,77 @@ describe("hardcoded colour ban (§11.1)", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * Stock Tailwind utilities are banned — and this test is the ONLY thing that
+ * enforces it.
+ *
+ * This corrects a false claim (ADR-011). Phase 1 asserted, in CLAUDE.md and in
+ * ADR-007, that clearing the `--color-*` and `--text-*` namespaces made
+ * `bg-indigo-500` "a build error rather than a code-review comment". It does
+ * not. Tailwind v4 silently emits NO CSS for an unknown utility: the build
+ * passes, nothing warns, and the class is simply inert. Verified by pasting
+ * `bg-indigo-500 rounded-md text-lg text-sm` into a page — clean build, zero
+ * matching rules in the output.
+ *
+ * So the namespace clearing is still worth having, but for a weaker reason than
+ * advertised: the indigo cannot RENDER, because no rule exists to render it.
+ * What it never did was tell anyone. And the failure modes differ by namespace:
+ *
+ *   · colour — `bg-indigo-500` produces no background. Visible, if you look.
+ *   · radius — `rounded-md` produces square corners. Visible, if you look.
+ *   · TYPE   — `text-sm` produces nothing, so the element INHERITS 14px from
+ *              body. Which is what upstream meant by text-sm anyway. It looks
+ *              perfect. Nothing is visibly wrong, and `text-xs` on a caption
+ *              silently renders at 14px instead of 12px forever.
+ *
+ * That last one is why this is a test and not a lint rule to write "later".
+ */
+describe("stock Tailwind utility ban (§11.1, §11.2, §11.4, §11.9)", () => {
+  const SIZE = /\btext-(xs|sm|base|lg|xl|[2-9]xl)\b/;
+  /* Only the dashed forms. A bare `rounded` is technically a stock utility too,
+     but matching it hits the English word — the first run flagged a test named
+     "sub-minute precision is preserved, not rounded". A guard that cries wolf
+     gets deleted, so this one deliberately under-reaches: bare `rounded` also
+     resolves to nothing under a cleared namespace, so the cost of missing it is
+     square corners, which are visible. */
+  const RADIUS = /\brounded-(none|xs|sm|md|lg|xl|[2-9]xl)\b/;
+  const PALETTE = new RegExp(
+    "\\b(bg|text|border|ring|from|via|to|fill|stroke|decoration|outline|accent|caret|divide|placeholder|shadow)-" +
+      "(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-" +
+      "(50|\\d{3})\\b",
+  );
+
+  function scan(pattern: RegExp): string[] {
+    const offenders: string[] = [];
+    for (const root of ["src/app", "src/components", "src/features"]) {
+      for (const file of tsFilesUnder(join(ROOT, root))) {
+        const lines = stripComments(readFileSync(file, "utf8")).split("\n");
+        for (const [i, line] of lines.entries()) {
+          if (pattern.test(line)) {
+            offenders.push(`${relative(ROOT, file)}:${i + 1} — ${line.trim().slice(0, 70)}`);
+          }
+        }
+      }
+    }
+    return offenders;
+  }
+
+  it("no stock type-scale classes — the scale is named by pixel size", () => {
+    // text-sm/base/lg do not exist here. A pasted shadcn component uses them
+    // meaning 14/16/18px and gets silence, which inherits 14px and looks fine.
+    // Ours are text-12 … text-32.
+    expect(scan(SIZE)).toEqual([]);
+  });
+
+  it("no stock palette classes — §11.9 names a stray indigo as an anti-tell", () => {
+    expect(scan(PALETTE)).toEqual([]);
+  });
+
+  it("no stock radius classes — only chip/control/card (§11.4: no pills)", () => {
+    // `rounded-full` is deliberately permitted: §11.4 allows it on avatars, and
+    // the 6px status dots are circles by nature. The negative lookahead spares
+    // rounded-chip/control/card.
+    expect(scan(RADIUS)).toEqual([]);
+  });
+});

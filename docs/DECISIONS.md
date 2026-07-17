@@ -161,7 +161,9 @@ The rejected alternative was staying put and excluding `node_modules`/`.next` fr
 
 ## ADR-007 — Tailwind v4, so the theme is CSS-first and there is no tailwind.config.ts
 
-**Date:** 2026-07-17 · **Status:** Accepted · **Phase:** 1
+**Date:** 2026-07-17 · **Status:** Accepted, **partly WRONG — see ADR-011** · **Phase:** 1
+
+> The decision (keep v4, theme in CSS) stands. The reasoning below overstates it: clearing a namespace does **not** make a stock utility a build error. Tailwind v4 silently emits no CSS and the build passes. The claim was predicted, never verified, and is corrected in ADR-011.
 
 ### Context
 
@@ -179,7 +181,7 @@ This turns out to serve §11.1 better than the original plan did. "Define tokens
 
 ### Consequences
 
-- **Good:** three design rules moved from discipline to mechanism. The ones a tired person breaks at 1am are the ones now impossible.
+- ~~**Good:** three design rules moved from discipline to mechanism. The ones a tired person breaks at 1am are the ones now impossible.~~ **Wrong (ADR-011).** They are not impossible; they are inert. A stock utility produces no CSS and no error. The rules did move — but to `tokens.test.ts`, which had to be written, not to the compiler, which was never doing this.
 - **Cost:** imported shadcn components assume stock utilities. `button.tsx` needed `rounded-md` → `rounded-control` and `text-sm` → `text-base` on the way in. This is a real, recurring tax on every component added — and it is the intended tax: it forces a read of the component rather than a paste. Documented in `CLAUDE.md`.
 - **Cost:** the structure doc's tree is wrong on this one file. The tree was illustrative; the conventions are what bind.
 
@@ -218,7 +220,9 @@ Either way the ring clears 3:1 against the surface, and it still reads as yellow
 
 ## ADR-009 — A submitted-but-never-verified record becomes `absent` at close
 
-**Date:** 2026-07-17 · **Status:** Accepted, flagged for review · **Phase:** 2
+**Date:** 2026-07-17 · **Status:** ~~Accepted~~ **SUPERSEDED by ADR-010** · **Phase:** 2
+
+> Superseded the same day, on review. The reasoning below is kept intact because it is the argument ADR-010 answers — in particular the claim that "the alternatives are worse", which turned out to be a false trichotomy: it weighed auto-approve against pending-forever against absent, and never considered that the system could simply decline to assert a fact it had not established.
 
 ### Context
 
@@ -245,3 +249,89 @@ The system's actual answers to the unfairness live elsewhere and are load-bearin
 - **Cost, and it is real:** rep inattention is charged to the student, not the rep. The rep-activity report (median verification latency, §10) is what makes this visible, and it should be watched — if reps routinely let sessions close on pending queues, this decision is producing wrong records at scale and disputes will not keep up.
 - **Cost:** this is the most likely source of end-of-term disputes by volume. `docs/RUNBOOK.md` should carry a "session closed with a pending queue" entry.
 - **Flagged for review:** if the reviewer wants a distinct `unverified` status, that is a legitimate call — it is a Phase 2 schema change, cheap now and expensive after Phase 8's reports and Phase 10's exports are built on the enum. Raised in the Phase 2 report.
+
+---
+
+## ADR-010 — `unverified` is its own status, and it leaves the denominator
+
+**Date:** 2026-07-17 · **Status:** Accepted · **Phase:** 2 · **Supersedes:** ADR-009
+
+### Context
+
+ADR-009 implemented §6.5 literally: a student who submits on time and is never verified is marked `absent` when the session closes. It flagged itself for review, because it was the only rule in the system where someone loses for another person's inaction.
+
+On review, the reviewer asked for the correction. They were right, and the original reasoning deserves a post-mortem rather than a quiet edit.
+
+ADR-009 rejected a distinct status on the grounds that the `attendance_status` enum is specified in §5 and does not contain one — treating the enum as a fixed input. But §5 opens with "The original spec's model was too thin. Build at minimum:" and the whole document is an exercise in correcting the spec it inherited. The prompt adds an Instructor role the original omitted, adds an enrollments table, adds disputes, and re-anchors timing from `approved_at` to `submitted_at` — each time because the original asserted something it could not support. `absent` for an unverified record is the same category of error: **the database asserting a fact it never established.**
+
+The deeper mistake was a false trichotomy. ADR-009 weighed auto-approve (an honour system), pending-forever (an unresolvable percentage), and absent (unfair) — and picked the least-bad of three. It never considered the fourth: say nothing. The system does not know whether that student was there. Every one of the three options invents an answer.
+
+### Decision
+
+**`unverified` is a tenth member of `attendance_status`.**
+
+- `close_session()` sweeps undecided records — both `pending_verification` and `pending_permission_review` — to `unverified` rather than `absent`. An unanswered permission request is the same failure as an unanswered attendance request: nobody answered.
+- `deriveStatus` returns `unverified` for a submitted-but-undecided record on a closed session.
+- **It leaves the percentage denominator**, alongside `cancelled` and `excused`. Not counted against, not counted for.
+- **It is counted separately** on `attendance_summaries.unverified_count`, and surfaced next to the percentage in reports.
+- **It is recoverable.** A closed session is not a finalized semester, so `records_decide_section` still permits a verdict, and a late approval derives to `present`/`late` normally — because timing still anchors on `submitted_at`. `unverified` is a state, not a grave.
+
+The distinction the whole thing rests on: **silence from the student is absence; silence from the rep is not.** `close_session` now writes `absent` only for students who left no record at all, and `unverified` for those who did their part.
+
+### Why "excluded from the denominator" and not something cleverer
+
+- **Counted as absent** — ADR-009. Charges the student for a rep's inaction.
+- **Counted as present** — auto-approve wearing a hat. "Submit and wait" becomes a guaranteed pass, and §1's premise (verification, not honour) is gone.
+- **Excluded** — the only option that does not invent a fact. The cost lands on the section's *data* rather than on a student's *record*, which is where it belongs and where it gets noticed.
+
+The exploit worth naming: a lazy or colluding rep could let every session close unverified, and their whole section's percentages would rest on a small denominator. That is a real hole, and it is deliberately left to detection rather than prevention — the rep-activity report (median verification latency, §10) and `unverified_count` on every summary are what make it loud. A control that punished students to prevent rep misconduct would be solving the wrong problem with the wrong person's grade.
+
+### Consequences
+
+- **The enum is ten members.** Cheap now; this is precisely why it was raised before Phase 8's reports and Phase 10's exports were built on it. The parity guard (`rules-enum-parity.test.ts`) caught every place needing an update, which is what it was for.
+- **Every surface must handle it**: the chip (neutral, outlined, static — pending pulses because someone is still coming; unverified does not, because nobody is), the register grid, the student's history, the transcript export.
+- **The registrar's export gets more honest and more awkward.** "Unverified: 3" is a real thing a real person has to explain. That is the correct amount of awkward: the alternative was a clean number that was wrong.
+- **A section with many `unverified` records is a broken section**, and now says so. `docs/RUNBOOK.md` gets an entry: sustained unverified counts mean a rep is not working the queue, and the fix is a rep, not a migration.
+- **Migration 0002 was edited rather than a 0015 added.** Nothing is deployed, so the migration set is still being authored; `ALTER TYPE ... ADD VALUE` also cannot run inside a transaction block, which would have made a follow-up migration awkward for no benefit. Once anything ships, this stops being available and a new migration is the only route.
+
+---
+
+## ADR-011 — Clearing a Tailwind namespace does not error; the guard is a test
+
+**Date:** 2026-07-17 · **Status:** Accepted · **Phase:** 2 · **Amends:** ADR-007
+
+### Context
+
+ADR-007 and `CLAUDE.md` both stated that clearing the `--color-*`, `--text-*` and `--radius-*` namespaces makes a stock utility "a build error rather than a code-review comment", and celebrated three anti-tells moving "from discipline to mechanism".
+
+**That is false, and it was never verified.** It was predicted in Phase 1 and written down as fact.
+
+Tailwind v4 silently emits no CSS for an unknown utility. Pasting `bg-indigo-500 rounded-md text-lg text-sm` into a page produces a clean build, no warning, and zero matching rules in the output. Nothing fails. Nothing says anything.
+
+The irony is that Phase 1 reported the type scale as "the one thing most likely to be wrong" for the right reason (a remapped `text-sm` silently renders 13px where upstream meant 14px) while asserting elsewhere that the same class of mistake could not compile. Both statements were in the same document.
+
+### What is actually true
+
+The namespace clearing is still worth having — but for a weaker reason than advertised. The anti-tell cannot **render**, because no rule exists to render it. What it never did is **tell anyone**. And the failure mode differs per namespace, which is the part that matters:
+
+| Namespace | A pasted stock class produces | Noticed? |
+|---|---|---|
+| colour | no background / no colour | Visible, if you look |
+| radius | square corners | Visible, if you look |
+| **type** | **nothing → inherits 14px from body** | **No. It looks correct.** |
+
+Type is the dangerous one, and it is dangerous in the opposite direction from what Phase 1 assumed. An unknown `text-sm` inherits body's 14px — which is exactly what upstream meant by `text-sm`. It looks perfect. Meanwhile `text-xs` on a caption inherits 14px instead of 12px and renders a step large, forever, with nothing to notice.
+
+### Decision
+
+1. **Rename the type scale to `text-12` … `text-32`** (Phase 1's remap reused `text-xs`/`sm`/`base`/`lg` with different values). This is a real improvement, just not the one claimed: a pasted `text-sm` now resolves to nothing and inherits 14px, rather than resolving to 13px and being wrong. The names also state the scale honestly — §11.2 specifies "12 / 13 / 14 / 16 / 20 / 24 / 32", so the classes may as well say so.
+
+2. **Add the guard that actually makes it loud** — `tokens.test.ts` scans `src/app`, `src/components` and `src/features` for stock type, palette and radius classes, and fails the gate naming file and line. This is what ADR-007 claimed the compiler was doing.
+
+3. **Correct `CLAUDE.md` and ADR-007's consequences.** A document that overstates a safety property is worse than one that omits it: it tells the next reader not to check.
+
+### Consequences
+
+- The mechanism is a **test**, not the compiler. It runs in `pnpm gate`, so the practical effect for anyone adding a shadcn component is the same — the gate stops them and names the line. It is coarse (regex over source, comments stripped) and deliberately under-reaches on bare `rounded`, which matched the English word in a test title. A guard that cries wolf gets deleted.
+- Each of the three assertions was **verified by pasting a real violation and watching it fail**, then removing it and watching it pass. That is the same discipline that caught the ESLint `mode: "file"` bug, which also looked correct and enforced nothing. Two for two: both times the config was written, plausible, and inert.
+- **The wider lesson, recorded because it will recur:** "this cannot happen because the tooling prevents it" is a claim, and claims about tooling need the same proof as claims about code. Every remaining guard in this repo has now been fired at least once on purpose.

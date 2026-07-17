@@ -69,8 +69,9 @@ function derivePermissionStatus(
   // that word is reserved for "claimed present, wasn't" (see below).
   if (permission === "rejected") return "absent";
 
-  // Undecided. Once the session is closed there is no one left to decide.
-  if (sessionStatus === "closed") return "absent";
+  // Undecided at close: the student asked and nobody answered. ADR-010 — that
+  // is a failure to establish a fact, not evidence of absence.
+  if (sessionStatus === "closed") return "unverified";
   return "pending_permission_review";
 }
 
@@ -102,19 +103,25 @@ function deriveAttendanceStatus(
 
   // No verdict yet.
   if (submittedAt !== null) {
-    // §6.5: "Session closed with no approved record → absent."
+    // §6.5 says "Session closed with no approved record → absent". Taken
+    // literally that marks a student absent who submitted on time and was never
+    // verified — they did everything right and lost anyway, for a rep's
+    // inaction. ADR-010 declines to do that.
     //
-    // Read literally, and it is: a student who submitted on time and was never
-    // verified is marked absent. That is harsh, and it is deliberate rather
-    // than accidental — the alternatives are worse. Auto-approving on close
-    // would hand every student a way to be present by submitting and waiting;
-    // leaving it pending forever would mean the percentage never resolves.
+    // `unverified` is the honest word: the system never established a fact, so
+    // it asserts neither. It leaves the percentage denominator entirely, which
+    // means rep inattention costs the student nothing and costs the SECTION its
+    // data — which is where the cost belongs, and where it gets noticed.
     //
-    // The system's answer to the unfairness is elsewhere: reps see an elapsed
-    // timer per request (§6.3), and the student can open a dispute (§6.6). See
-    // ADR-009 — this is the one derivation choice worth re-examining, because
-    // it is the only one where a student loses for someone else's inaction.
-    if (sessionStatus === "closed") return "absent";
+    // Note this is not "pending forever": pending means someone is still
+    // expected to act, and after close nobody is. The distinction matters to
+    // the rep queue (which shows pendings) and to the registrar's export (which
+    // must not show a term full of "waiting").
+    //
+    // Recoverable: a closed session is not a finalized semester, so a rep or
+    // instructor can still decide it, and this function will then return
+    // present/late from the `decision` branch above.
+    if (sessionStatus === "closed") return "unverified";
     return "pending_verification";
   }
 

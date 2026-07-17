@@ -12,8 +12,11 @@ import { cn } from "@/lib/utils";
    · shadow-xs dropped from `outline`. §11.4: shadows exist only on things that
      float above the page — popover, dialog, sheet, dropdown, toast. A button
      sits on the page.
-   · text-sm → text-base. Our scale is remapped (§11.2): text-base IS 14px, the
-     default UI size. Upstream's text-sm would now resolve to 13px.
+   · text-sm → text-14. Upstream means 14px by `text-sm`; our scale is named by
+     pixel size (§11.2) so `text-sm` does not exist and the build stops. That is
+     the point of the naming — when this component was first imported the scale
+     still reused Tailwind's names, `text-sm` silently resolved to 13px, and the
+     button was a step small until someone noticed by eye.
    · focus ring removed. globals.css puts a 2px --signal outline on every
      :focus-visible element, which is one of yellow's five sanctioned uses.
      Keeping shadcn's ring-[3px] would double it up.
@@ -24,7 +27,7 @@ import { cn } from "@/lib/utils";
    · `default` variant is the yellow fill with --ink text (~12:1) — sanctioned
      use #1 of five. There is no other yellow in this file. */
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-control text-base font-medium whitespace-nowrap transition-colors duration-150 ease-out outline-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-2 rounded-control text-14 font-medium whitespace-nowrap transition-colors duration-150 ease-out outline-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -41,7 +44,7 @@ const buttonVariants = cva(
       size: {
         default: "h-11 px-4 py-2 has-[>svg]:px-3",
         sm: "h-9 gap-1.5 px-3 has-[>svg]:px-2.5",
-        xs: "h-6 gap-1 rounded-chip px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
+        xs: "h-6 gap-1 rounded-chip px-2 text-12 has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
         lg: "h-12 px-6 has-[>svg]:px-4",
         icon: "size-11",
         "icon-sm": "size-9",

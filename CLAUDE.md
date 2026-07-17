@@ -156,8 +156,9 @@ RLS is the security boundary. Middleware is UX. `can()` is UI convenience that *
 
 ## Domain rules that are easy to get wrong
 
-- **Absences are rows.** `close_session()` writes an `absent` record for every enrolled, non-withdrawn student with no record. No rows = no absences = wrong percentages. This is the step everyone forgets.
+- **Absences are rows.** `close_session()` writes an `absent` record for every enrolled student with no record. No rows = no absences = wrong percentages. This is the step everyone forgets. "Enrolled" is temporal (`enrolled_at <= starts_at and (dropped_at is null or dropped_at > starts_at)`), not a status check — otherwise every drop rewrites history.
 - **`rejected` ≠ `absent`.** Rejected means "claimed present, wasn't". Keep them distinguishable forever, even if both count against attendance.
+- **`unverified` ≠ `absent`** (ADR-010). Submitted on time, never decided. Leaves the denominator; counted separately; still decidable after close. Never charge a student for a rep's inaction.
 - **Timing anchors on `submitted_at`, not `approved_at`.** Submit at minute 2, approved at minute 12 → **present**. Rep slowness is a rep metric (`verification_latency_seconds`), never a student penalty.
 - **Cancelled sessions leave the denominator.** So do excused ones, per `permission_reasons.counts_as_excused`.
 - **Sessions pin their rule snapshot at open time.** Copied, not referenced.
@@ -171,13 +172,17 @@ RLS is the security boundary. Middleware is UX. `can()` is UI convenience that *
 
 Tokens in `globals.css`. **No hex anywhere else.** `/dev/tokens` renders every token, chip and control state and computes contrast live — it's the reference; derive from it, don't improvise.
 
-**Tailwind v4 — the theme is CSS-first; there is no `tailwind.config.ts`** (ADR-007). `@theme` in `globals.css` is the whole theme, and three namespaces are cleared before being redefined, which turns design rules into build errors:
+**Tailwind v4 — the theme is CSS-first; there is no `tailwind.config.ts`** (ADR-007). `@theme` in `globals.css` is the whole theme, and three namespaces are cleared before being redefined:
 
-- `--color-*: initial` → the stock palette does not exist. `bg-indigo-500` fails to build.
-- `--text-*: initial` → the scale is exactly 12/13/14/16/20/24/32. **18px is unreachable** (stock `text-lg` was 18px). Note `text-base` is **14px** and `text-sm` is **13px** — remapped, so upstream shadcn sizing is wrong by one step.
-- `--radius-*: initial` → only `rounded-chip` (4), `rounded-control` (6), `rounded-card` (8).
+- `--color-*: initial` → the stock palette does not exist.
+- `--text-*: initial` → the scale is exactly **`text-12` `text-13` `text-14` `text-16` `text-20` `text-24` `text-32`**, named by pixel size. Default UI text is `text-14`. 18px is not in the scale (§11.9: nothing at 18px).
+- `--radius-*: initial` → only `rounded-chip` (4), `rounded-control` (6), `rounded-card` (8). `rounded-full` for avatars and dots only.
 
-**Adding a shadcn component:** it will assume stock utilities. Expect to fix `rounded-md` → `rounded-control`, `text-sm` → `text-base`, and to strip `shadow-*` (shadows only on floating things) and its focus ring (we have a global one). Read the component on the way in; don't paste it. `src/components/ui/button.tsx` is the worked example, and its header comments list every change and why.
+**A stock utility does NOT fail the build** (ADR-011). Tailwind v4 silently emits no CSS for an unknown class — `bg-indigo-500` produces nothing, no warning, clean build. It cannot *render*, but nothing *tells you*. Type is the trap: an unknown `text-sm` inherits body's 14px and looks perfect, while `text-xs` on a caption silently renders 14px instead of 12px.
+
+**What actually catches it: `src/lib/tokens.test.ts`**, which scans `src/app`, `src/components` and `src/features` for stock type/palette/radius classes and fails the gate with file and line. It runs in `pnpm gate`.
+
+**Adding a shadcn component:** it assumes stock utilities. Expect to fix `rounded-md` → `rounded-control`, `text-sm` → `text-14`, and to strip `shadow-*` (shadows only on floating things) and its focus ring (we have a global one). Read the component on the way in; don't paste it. The gate will catch the classes, not the shadows. `src/components/ui/button.tsx` is the worked example and its header lists every change and why.
 
 **`--primary` and `--ring` resolve to our yellow** in the shadcn semantic layer, so an imported component cannot bring a new accent with it.
 
@@ -204,7 +209,9 @@ Dark: `--wash #0A0A0A`, `--paper #141414`, `--line #262626`, `--ink #FAFAF9`, `-
 
 **Type:** Inter for UI (14px default, 13px cells/labels, 24px page titles max). JetBrains Mono, tabular figures, for every number, code, matric, timestamp, percentage. Scale `12/13/14/16/20/24/32`. **Nothing on a dashboard is 18px.** `font-variant-numeric: tabular-nums` on anything live — digits must not jitter.
 
-**Status chips:** dot + label, 12px, `--mute` text, transparent bg, 1px `--line` border. Colour only in the 6px dot, desaturated ~20% from Tailwind defaults. `present` emerald · `late` orange · `absent` rose · `permission_granted` blue · `excused` blue outline · `pending_verification` neutral + slow pulse · `rejected` rose outline · `cancelled` mute, struck through.
+**Status chips:** dot + label, 12px, `--mute` text, transparent bg, 1px `--line` border. Colour only in the 6px dot, desaturated ~20% from Tailwind defaults. `present` emerald · `late` orange · `absent` rose · `permission_granted` blue · `excused` blue outline · `pending_verification` neutral + slow pulse · `unverified` neutral outline, static · `rejected` rose outline · `cancelled` mute, struck through.
+
+**`unverified` is not `absent`** (ADR-010). The student submitted on time and nobody ever decided. It leaves the percentage denominator, is counted separately on the summary, and stays decidable after close. **Silence from the student is absence; silence from the rep is not.** The chip is static where pending pulses, because a pulse promises someone is still coming.
 
 **Layout:** Phone-first at 360×640 — a layout that only works from `md:` up is a failed layout. Desktop: 232px sidebar (border, no fill), 52px topbar, 1200px content, 24px gutters. Mobile: no sidebar, 56px bottom tab bar (max 4 items), forms are **bottom sheets not centre modals**. Cards: 1px `--line`, radius 8, **no shadow** — shadows only on popover/dialog/sheet/dropdown/toast. Radius 6 controls / 8 cards / 4 chips. No pills. Tables → cards below `md`; never horizontal-scroll a table on a phone. 44px rows desktop, 56px mobile, 44×44 minimum hit target. Primary actions in the thumb zone. No hover-only affordances.
 

@@ -9,7 +9,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 \ir helpers.sql
 
-select plan(16);
+select plan(20);
 
 select tests.seed_fixture();
 
@@ -121,9 +121,10 @@ select throws_ok(
 -- close_session() — the load-bearing job (§6.1)
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- Six students are enrolled in section A. Three have records (two pending, one
--- being the rep's own). Closing must write absences for the other three and
--- sweep the three pending ones to absent (ADR-009).
+-- Six students are enrolled in section A. Three submitted and are pending (one
+-- of them the rep's own). Closing must write absences for the three who never
+-- submitted, and sweep the three pending ones to `unverified` — not absent
+-- (ADR-010). The split between those two numbers is the whole decision.
 
 select is(
   (select count(*) from public.attendance_records where session_id = tests.uid('session_a_open'))::int,
@@ -152,7 +153,42 @@ select is(
     where session_id = tests.uid('session_a_open')
       and status in ('pending_verification', 'pending_permission_review'))::int,
   0,
-  'no record is left pending after close (ADR-009)'
+  'no record is left pending after close — nobody is coming'
+);
+
+-- ADR-010. The three students who submitted and were never decided become
+-- `unverified`, NOT `absent`. This is the assertion that stops someone
+-- "simplifying" the sweep back to absent and quietly charging students for a
+-- rep's inaction.
+select is(
+  (select count(*) from public.attendance_records
+    where session_id = tests.uid('session_a_open') and status = 'unverified')::int,
+  3,
+  'submitted-but-undecided records become unverified at close (ADR-010)'
+);
+
+select is(
+  (select count(*) from public.attendance_records
+    where session_id = tests.uid('session_a_open') and status = 'absent')::int,
+  3,
+  'and only the three who never submitted are absent — student silence is absence, rep silence is not'
+);
+
+-- The cost lands on the section's data, not on the student's record.
+select is(
+  (select unverified_count from public.attendance_summaries
+    where student_id = tests.uid('student_1')
+      and class_section_id = tests.uid('section_a')),
+  1,
+  'unverified is counted on the summary, so a broken section is visible'
+);
+
+select is(
+  (select countable_total from public.attendance_summaries
+    where student_id = tests.uid('student_1')
+      and class_section_id = tests.uid('section_a')),
+  0,
+  'and excluded from the denominator — the system asserts no fact it never established'
 );
 
 select is(

@@ -115,7 +115,9 @@ describe("permission requests (§6.4)", () => {
     }
   });
 
-  it("undecided at close → absent (no one is left to decide)", () => {
+  it("undecided at close → unverified, never absent (ADR-010)", () => {
+    // The student asked and nobody answered. That is not evidence they were
+    // away; it is evidence the system did not do its job.
     expect(
       deriveStatus(
         input({
@@ -124,7 +126,7 @@ describe("permission requests (§6.4)", () => {
           permission: null,
         }),
       ),
-    ).toBe("absent");
+    ).toBe("unverified");
   });
 
   it("the permission verdict beats the attendance verdict on the same row", () => {
@@ -161,25 +163,44 @@ describe("verification verdicts (§6.3)", () => {
     }
   });
 
-  it("submitted but never verified, session closed → absent", () => {
-    // The harsh one, and deliberate — see ADR-009. A student who did everything
-    // right and was never verified loses. The remedy is a dispute (§6.6), not a
-    // different status.
+  it("submitted but never verified, session closed → unverified (ADR-010)", () => {
+    // The correction. §6.5 read literally says 'absent'; that charges a student
+    // for a rep's inaction — the one thing they cannot influence.
     expect(
       deriveStatus(
         input({ sessionStatus: "closed", submittedAt: at(1), decision: null }),
       ),
-    ).toBe("absent");
+    ).toBe("unverified");
   });
 
   it("no submission at all, session closed → absent", () => {
     // The row close_session() writes for everyone who never reported. Absences
     // are rows, not the absence of rows.
+    //
+    // The contrast with the test above is the whole point of ADR-010: silence
+    // from the STUDENT is absence; silence from the REP is not.
     expect(
       deriveStatus(
         input({ sessionStatus: "closed", submittedAt: null, decision: null }),
       ),
     ).toBe("absent");
+  });
+
+  it("a late verdict still resolves an unverified record", () => {
+    // `unverified` is recoverable, not a grave. A closed session is not a
+    // finalized semester, so a rep can still decide — and the timing anchor is
+    // still submitted_at, so a week-late approval of an on-time submission is
+    // present.
+    expect(
+      deriveStatus(
+        input({
+          sessionStatus: "closed",
+          submittedAt: at(2),
+          approvedAt: at(10_000),
+          decision: "approved",
+        }),
+      ),
+    ).toBe("present");
   });
 });
 
@@ -399,13 +420,16 @@ describe("impossible states fail loudly", () => {
 describe("every status in the enum is reachable", () => {
   /* If a status cannot be produced, either the enum is wrong or a branch is
      unreachable. Both are bugs, and neither shows up in a per-branch test. */
-  it("produces all nine", () => {
+  it("produces all ten", () => {
     const produced = new Set<AttendanceStatus>([
       deriveStatus(input({ sessionStatus: "cancelled" })),
       deriveStatus(input({ decision: "approved", submittedAt: at(1) })),
       deriveStatus(input({ decision: "approved", submittedAt: at(15) })),
       deriveStatus(input({ decision: "rejected" })),
       deriveStatus(input({ submittedAt: at(1), decision: null })),
+      deriveStatus(
+        input({ sessionStatus: "closed", submittedAt: at(1), decision: null }),
+      ),
       deriveStatus(
         input({ sessionStatus: "closed", submittedAt: null, decision: null }),
       ),
@@ -423,6 +447,7 @@ describe("every status in the enum is reachable", () => {
     const all: AttendanceStatus[] = [
       "pending_verification",
       "pending_permission_review",
+      "unverified",
       "present",
       "late",
       "permission_granted",

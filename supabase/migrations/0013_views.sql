@@ -33,9 +33,22 @@ create table public.attendance_summaries (
   cancelled_count integer not null default 0,
   pending_count integer not null default 0,
 
-  -- The denominator. Excludes cancelled (the class did not happen) and excused
-  -- (the reason was flagged counts_as_excused), per §5 and §12. Also excludes
-  -- pending, which has not resolved into anything yet.
+  -- ADR-010. Counted, never hidden: this number is the rep's failure made
+  -- visible, and the low-attendance report should show it beside the
+  -- percentage. A student with 12 unverified sessions has a broken section,
+  -- not a broken attendance record.
+  unverified_count integer not null default 0,
+
+  -- The denominator. Excludes:
+  --   · cancelled  — the class did not happen
+  --   · excused    — the reason was flagged counts_as_excused (§5)
+  --   · pending    — has not resolved into anything yet
+  --   · unverified — ADR-010. The system never established a fact here, so it
+  --                  asserts neither. Counting it as absent would charge the
+  --                  student for a rep's inaction; counting it as attended
+  --                  would make "submit and wait" a guaranteed pass and turn
+  --                  verification into an honour system. Excluding is the only
+  --                  answer that does not invent a fact.
   countable_total integer not null default 0,
 
   -- The numerator: present + late. A late student was in the room.
@@ -104,7 +117,7 @@ begin
     student_id, class_section_id,
     present_count, late_count, absent_count, rejected_count,
     permission_granted_count, excused_count, cancelled_count, pending_count,
-    countable_total, attended_count, updated_at
+    unverified_count, countable_total, attended_count, updated_at
   )
   select
     p_student_id,
@@ -117,6 +130,7 @@ begin
     count(*) filter (where r.status = 'excused'),
     count(*) filter (where r.status = 'cancelled'),
     count(*) filter (where r.status in ('pending_verification', 'pending_permission_review')),
+    count(*) filter (where r.status = 'unverified'),
     count(*) filter (
       where r.status in ('present', 'late', 'absent', 'rejected', 'permission_granted')
     ),
@@ -136,6 +150,7 @@ begin
     excused_count = excluded.excused_count,
     cancelled_count = excluded.cancelled_count,
     pending_count = excluded.pending_count,
+    unverified_count = excluded.unverified_count,
     countable_total = excluded.countable_total,
     attended_count = excluded.attended_count,
     updated_at = now();
@@ -203,6 +218,7 @@ select
   s.excused_count,
   s.cancelled_count,
   s.pending_count,
+  s.unverified_count,
   s.countable_total,
   s.attended_count,
   s.attendance_percent,

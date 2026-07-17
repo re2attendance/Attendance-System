@@ -513,13 +513,23 @@ begin
   )
   select count(*)::integer into v_absences from inserted;
 
-  -- ADR-009: a submitted-but-never-verified record becomes absent at close.
-  -- The student did everything right and loses anyway; the remedies are the
-  -- rep's elapsed timer (§6.3) and the dispute path (§6.6). This sweep is where
-  -- that decision physically happens, and it is the line to change if the
-  -- reviewer wants a distinct `unverified` status instead.
+  -- ADR-010 (supersedes ADR-009): a record nobody ever decided becomes
+  -- `unverified`, not `absent`.
+  --
+  -- The student submitted on time and the system failed to establish a fact
+  -- about them. Recording `absent` would be the database asserting something it
+  -- never determined — and charging the student for a rep's inaction, the one
+  -- thing they cannot influence.
+  --
+  -- Covers both pendings: an undecided permission request is the same failure
+  -- as an undecided attendance request. Nobody answered.
+  --
+  -- These records stay decidable. A closed session is not a finalized semester,
+  -- so records_decide_section still permits a late verdict, and deriving from a
+  -- later `decision` yields present/late normally. `unverified` is a recoverable
+  -- state, not a grave.
   update public.attendance_records
-  set status = 'absent'
+  set status = 'unverified'
   where session_id = p_session_id
     and status in ('pending_verification', 'pending_permission_review');
 

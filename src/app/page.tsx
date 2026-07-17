@@ -8,12 +8,12 @@ import Link from "next/link";
 export default function Home() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-[1200px] flex-col justify-center px-6 py-10">
-      <h1 className="text-xl font-semibold text-ink">Attendance</h1>
-      <p className="mt-1 max-w-prose text-sm text-mute">
+      <h1 className="text-24 font-semibold text-ink">Attendance</h1>
+      <p className="mt-1 max-w-prose text-13 text-mute">
         University attendance management. Phase 1 — foundation. Sign-in arrives
         in Phase 3; until then the only thing built is the design system.
       </p>
-      <p className="mt-4 text-sm">
+      <p className="mt-4 text-13">
         <Link
           href="/dev/tokens"
           className="text-deep underline underline-offset-4"

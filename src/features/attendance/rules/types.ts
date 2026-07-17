@@ -9,6 +9,8 @@
 export type AttendanceStatus =
   | "pending_verification"
   | "pending_permission_review"
+  /** Submitted on time; nobody ever decided. Not absent — see ADR-010. */
+  | "unverified"
   | "present"
   | "late"
   | "permission_granted"

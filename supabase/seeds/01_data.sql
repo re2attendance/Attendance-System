@@ -450,11 +450,15 @@ cross join lateral (
       when e.student_id = seed.seed_uid('student_300') then
         case when seed.seed_roll(e.student_id::text || s.id::text) < 60 then 'absent'::public.attendance_status
              else 'present'::public.attendance_status end
-      when seed.seed_roll(e.student_id::text || s.id::text) < 62 then 'present'::public.attendance_status
-      when seed.seed_roll(e.student_id::text || s.id::text) < 76 then 'late'::public.attendance_status
-      when seed.seed_roll(e.student_id::text || s.id::text) < 89 then 'absent'::public.attendance_status
-      when seed.seed_roll(e.student_id::text || s.id::text) < 92 then 'rejected'::public.attendance_status
-      when seed.seed_roll(e.student_id::text || s.id::text) < 96 then 'permission_granted'::public.attendance_status
+      when seed.seed_roll(e.student_id::text || s.id::text) < 60 then 'present'::public.attendance_status
+      when seed.seed_roll(e.student_id::text || s.id::text) < 74 then 'late'::public.attendance_status
+      when seed.seed_roll(e.student_id::text || s.id::text) < 87 then 'absent'::public.attendance_status
+      when seed.seed_roll(e.student_id::text || s.id::text) < 90 then 'rejected'::public.attendance_status
+      when seed.seed_roll(e.student_id::text || s.id::text) < 94 then 'permission_granted'::public.attendance_status
+      -- ADR-010: a realistic term has some. If the seed never produces
+      -- `unverified`, nobody building the register grid or the rep-activity
+      -- report ever sees the state their screen has to explain.
+      when seed.seed_roll(e.student_id::text || s.id::text) < 97 then 'unverified'::public.attendance_status
       else 'excused'::public.attendance_status
     end as status
 ) st

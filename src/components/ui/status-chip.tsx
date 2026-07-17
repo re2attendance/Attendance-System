@@ -35,6 +35,12 @@ const DOT: Record<AttendanceStatus, string> = {
   pending_verification: "bg-status-pending motion-safe:animate-pulse",
   pending_permission_review: "bg-status-pending motion-safe:animate-pulse",
 
+  /* ADR-010. Neutral like pending, because it IS the terminal form of pending —
+     but outlined and static, because the difference a reader needs is "nobody
+     is coming". A pulsing dot promises someone is still working on it; on a
+     closed session that promise is a lie. */
+  unverified: "border border-status-pending bg-transparent",
+
   cancelled: "bg-mute",
 };
 
@@ -47,6 +53,10 @@ const LABEL: Record<AttendanceStatus, string> = {
   rejected: "Rejected",
   pending_verification: "Pending verification",
   pending_permission_review: "Pending permission review",
+  /* §11.7 — the interface's vocabulary is consistent end to end, and this word
+     is doing real work. It says what happened (nobody verified this) rather
+     than what the student did, because the student did nothing wrong. */
+  unverified: "Unverified",
   cancelled: "Cancelled",
 };
 
@@ -61,7 +71,7 @@ export function StatusChip({
     <span
       data-status={status}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-chip border border-line px-2 py-0.5 text-xs text-mute",
+        "inline-flex items-center gap-1.5 rounded-chip border border-line px-2 py-0.5 text-12 text-mute",
         className,
       )}
     >

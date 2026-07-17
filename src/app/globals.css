@@ -160,17 +160,31 @@
   --color-ring: var(--ring);
 
   /* Type scale — §11.2, exactly 12/13/14/16/20/24/32.
-     The namespace is cleared first so that 18px is not reachable: Tailwind's
-     stock `text-lg` is 18px, and "anything at 18px" is a named anti-tell. You
-     cannot type your way to it here. Default UI text is 14px (--text-base). */
+     The namespace is cleared first so 18px is not reachable: Tailwind's stock
+     `text-lg` is 18px and "anything at 18px" is a named anti-tell (§11.9).
+
+     Named by their pixel size, and NOT reusing xs/sm/base/lg. That is the whole
+     point of the naming, and it was a Phase 1 bug worth fixing:
+
+     This scale is remapped, so `text-sm` here would be 13px while every shadcn
+     component upstream writes `text-sm` meaning 14px. A pasted component would
+     have rendered one step small — silently, looking almost right, with nothing
+     erroring. Compare the radius tokens below, which use names stock Tailwind
+     does not have: that is why `button.tsx`'s `rounded-md` failed loudly on the
+     way in and got fixed, while its `text-sm` slipped through and had to be
+     caught by eye.
+
+     With these names, any stock size class is simply undefined and the build
+     stops. The wrong thing does not compile instead of looking fine — which is
+     the same argument as `--color-*: initial` killing the indigo. */
   --text-*: initial;
-  --text-xs: 0.75rem; /* 12 — labels, eyebrows, chips */
-  --text-sm: 0.8125rem; /* 13 — table cells, labels */
-  --text-base: 0.875rem; /* 14 — default UI text */
-  --text-md: 1rem; /* 16 */
-  --text-lg: 1.25rem; /* 20 */
-  --text-xl: 1.5rem; /* 24 — page titles, max */
-  --text-2xl: 2rem; /* 32 — the session code only */
+  --text-12: 0.75rem; /* labels, eyebrows, chips */
+  --text-13: 0.8125rem; /* table cells, labels */
+  --text-14: 0.875rem; /* default UI text */
+  --text-16: 1rem;
+  --text-20: 1.25rem;
+  --text-24: 1.5rem; /* page titles, max */
+  --text-32: 2rem; /* the session code only */
 
   /* Radius — §11.4. 6 controls / 8 cards / 4 chips. No pills.
      `rounded-full` stays reachable for avatars only. */
@@ -194,7 +208,7 @@
 
   body {
     font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
-    font-size: var(--text-base);
+    font-size: var(--text-14);
     -webkit-font-smoothing: antialiased;
   }
 

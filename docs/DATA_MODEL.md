@@ -91,13 +91,20 @@ Snapshots are immutable, enforced by a trigger that rejects UPDATE and DELETE **
 
 `sessions_open_has_rules_snapshot` makes it structural: there is no path to an open session whose rules can still move.
 
-### 7. `rejected` ≠ `absent`, and `excused` ≠ `permission_granted`
+### 7. Four words that are not synonyms
+
+The enum's whole value is in distinctions that a lazier model would collapse:
 
 - **rejected** — claimed present, wasn't. Both it and absent count against attendance; collapsing them erases the difference between not turning up and being judged to have lied, which is exactly what a dispute turns on.
-- **excused** — leaves the percentage denominator entirely.
+- **excused** — leaves the percentage denominator entirely. Driven by `permission_reasons.counts_as_excused`.
 - **permission_granted** — stays in it. "We know why you missed it, and it still counts" is a real category someone chose on purpose.
+- **unverified** (ADR-010) — the student submitted on time and nobody ever decided. **Not absent.** Marking them absent would have the database assert a fact it never established, and charge the student for a rep's inaction — the one thing they cannot influence.
 
-Driven by `permission_reasons.counts_as_excused`.
+The rule underneath: **silence from the student is absence; silence from the rep is not.** `close_session()` writes `absent` only for students who left no record at all, and `unverified` for those who did their part and were ignored.
+
+`unverified` leaves the denominator (counted as neither attended nor missed), is counted separately on `attendance_summaries.unverified_count`, and stays decidable — a closed session is not a finalized semester, so a late verdict still resolves it to present/late via `submitted_at`. It is a state, not a grave.
+
+The exploit worth naming: a rep who never verifies leaves their whole section resting on a small denominator. That is left to detection, not prevention — `unverified_count` on every summary and the rep-activity report (§10) make it loud. A control that punished students to prevent rep misconduct would be solving the wrong problem with the wrong person's grade.
 
 ### 8. Server time is authoritative, and a default is not enough
 

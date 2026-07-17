@@ -29,14 +29,14 @@ export const metadata: Metadata = {
    that only exists on a branch stops being true by week three. */
 
 const SECTION = "border-t border-line pt-6 mt-10 first:mt-0 first:border-0 first:pt-0";
-const H2 = "text-base font-semibold text-ink";
-const NOTE = "mt-1 text-xs text-mute max-w-2xl";
+const H2 = "text-14 font-semibold text-ink";
+const NOTE = "mt-1 text-12 text-mute max-w-2xl";
 
 function Ratio({ fg, bg, use = "text" }: { fg: string; bg: string; use?: "text" | "non-text" }) {
   const ratio = contrastRatio(fg, bg);
   const pass = meetsAA(ratio, use);
   return (
-    <span className="inline-flex items-center gap-1.5 font-mono text-xs">
+    <span className="inline-flex items-center gap-1.5 font-mono text-12">
       <span className={pass ? "text-status-present" : "text-status-absent"}>
         {pass ? "PASS" : "FAIL"}
       </span>
@@ -68,9 +68,9 @@ function Swatch({
         style={{ background: hex }}
       />
       <div className="min-w-0">
-        <div className="font-mono text-sm text-ink">--{name}</div>
-        <div className="font-mono text-xs text-mute uppercase">{hex}</div>
-        <div className="mt-0.5 font-mono text-xs text-mute">
+        <div className="font-mono text-13 text-ink">--{name}</div>
+        <div className="font-mono text-12 text-mute uppercase">{hex}</div>
+        <div className="mt-0.5 font-mono text-12 text-mute">
           {formatRatio(contrastRatio(hex, onSurface))} on --paper
         </div>
       </div>
@@ -81,6 +81,7 @@ function Swatch({
 const ALL_STATUSES: AttendanceStatus[] = [
   "pending_verification",
   "pending_permission_review",
+  "unverified",
   "present",
   "late",
   "permission_granted",
@@ -91,13 +92,13 @@ const ALL_STATUSES: AttendanceStatus[] = [
 ];
 
 const TYPE_SCALE = [
-  ["text-xs", "12px", "labels, eyebrows, chips"],
-  ["text-sm", "13px", "table cells, labels"],
-  ["text-base", "14px", "default UI text"],
-  ["text-md", "16px", ""],
-  ["text-lg", "20px", ""],
-  ["text-xl", "24px", "page titles, max"],
-  ["text-2xl", "32px", "the session code only"],
+  ["text-12", "12px", "labels, eyebrows, chips"],
+  ["text-13", "13px", "table cells, labels"],
+  ["text-14", "14px", "default UI text"],
+  ["text-16", "16px", ""],
+  ["text-20", "20px", ""],
+  ["text-24", "24px", "page titles, max"],
+  ["text-32", "32px", "the session code only"],
 ] as const;
 
 export default function TokensPage() {
@@ -105,7 +106,7 @@ export default function TokensPage() {
     <main className="mx-auto max-w-[1200px] px-6 py-10">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-ink">Design tokens</h1>
+          <h1 className="text-24 font-semibold text-ink">Design tokens</h1>
           <p className={NOTE}>
             The reference every other screen derives from. Contrast ratios are
             computed live by <span className="font-mono">lib/contrast.ts</span>{" "}
@@ -124,21 +125,21 @@ export default function TokensPage() {
           3:1 non-text floor. Text pairings are audited separately below.
         </p>
 
-        <h3 className="mt-4 text-xs tracking-wide text-mute">Light</h3>
+        <h3 className="mt-4 text-12 tracking-wide text-mute">Light</h3>
         <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {Object.entries(TOKENS_LIGHT).map(([name, hex]) => (
             <Swatch key={name} name={name} hex={hex} onSurface={TOKENS_LIGHT.paper} />
           ))}
         </div>
 
-        <h3 className="mt-6 text-xs tracking-wide text-mute">Dark</h3>
+        <h3 className="mt-6 text-12 tracking-wide text-mute">Dark</h3>
         <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {Object.entries(TOKENS_DARK).map(([name, hex]) => (
             <Swatch key={name} name={name} hex={hex} onSurface={TOKENS_DARK.paper} />
           ))}
         </div>
 
-        <h3 className="mt-6 text-xs tracking-wide text-mute">
+        <h3 className="mt-6 text-12 tracking-wide text-mute">
           Text pairings — 4.5:1 AA floor
         </h3>
         <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -154,7 +155,7 @@ export default function TokensPage() {
                   key={`${mode}-${fg}-${bg}`}
                   className="flex items-center justify-between gap-3 rounded-card border border-line px-3 py-2"
                 >
-                  <span className="font-mono text-xs text-ink">
+                  <span className="font-mono text-12 text-ink">
                     {mode} · --{fg} on --{bg}
                   </span>
                   <Ratio fg={t[fg]} bg={t[bg]} />
@@ -175,26 +176,26 @@ export default function TokensPage() {
         </p>
 
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[560px] border-collapse text-sm">
+          <table className="w-full min-w-[560px] border-collapse text-13">
             <thead>
               <tr className="border-b border-line text-left">
-                <th className="py-2 pr-4 text-xs font-medium tracking-wide text-mute uppercase">
+                <th className="py-2 pr-4 text-12 font-medium tracking-wide text-mute uppercase">
                   Pairing
                 </th>
-                <th className="py-2 pr-4 text-xs font-medium tracking-wide text-mute uppercase">
+                <th className="py-2 pr-4 text-12 font-medium tracking-wide text-mute uppercase">
                   Sample
                 </th>
-                <th className="py-2 pr-4 text-xs font-medium tracking-wide text-mute uppercase">
+                <th className="py-2 pr-4 text-12 font-medium tracking-wide text-mute uppercase">
                   AA text
                 </th>
-                <th className="py-2 text-xs font-medium tracking-wide text-mute uppercase">
+                <th className="py-2 text-12 font-medium tracking-wide text-mute uppercase">
                   Verdict
                 </th>
               </tr>
             </thead>
             <tbody className="text-ink">
               <tr className="border-b border-line">
-                <td className="py-3 pr-4 font-mono text-xs">--signal on --paper</td>
+                <td className="py-3 pr-4 font-mono text-12">--signal on --paper</td>
                 <td className="py-3 pr-4">
                   <span
                     className="rounded-chip px-2 py-1"
@@ -206,10 +207,10 @@ export default function TokensPage() {
                 <td className="py-3 pr-4">
                   <Ratio fg={TOKENS_LIGHT.signal} bg={TOKENS_LIGHT.paper} />
                 </td>
-                <td className="py-3 text-xs text-mute">Banned as text. Use --deep.</td>
+                <td className="py-3 text-12 text-mute">Banned as text. Use --deep.</td>
               </tr>
               <tr className="border-b border-line">
-                <td className="py-3 pr-4 font-mono text-xs">--deep on --paper</td>
+                <td className="py-3 pr-4 font-mono text-12">--deep on --paper</td>
                 <td className="py-3 pr-4">
                   <span
                     className="rounded-chip px-2 py-1"
@@ -221,10 +222,10 @@ export default function TokensPage() {
                 <td className="py-3 pr-4">
                   <Ratio fg={TOKENS_LIGHT.deep} bg={TOKENS_LIGHT.paper} />
                 </td>
-                <td className="py-3 text-xs text-mute">Yellow-toned text and links.</td>
+                <td className="py-3 text-12 text-mute">Yellow-toned text and links.</td>
               </tr>
               <tr className="border-b border-line">
-                <td className="py-3 pr-4 font-mono text-xs">--ink on --signal</td>
+                <td className="py-3 pr-4 font-mono text-12">--ink on --signal</td>
                 <td className="py-3 pr-4">
                   <span
                     className="rounded-chip px-2 py-1"
@@ -236,10 +237,10 @@ export default function TokensPage() {
                 <td className="py-3 pr-4">
                   <Ratio fg={TOKENS_LIGHT.ink} bg={TOKENS_LIGHT.signal} />
                 </td>
-                <td className="py-3 text-xs text-mute">The primary button.</td>
+                <td className="py-3 text-12 text-mute">The primary button.</td>
               </tr>
               <tr>
-                <td className="py-3 pr-4 font-mono text-xs">--signal on dark --wash</td>
+                <td className="py-3 pr-4 font-mono text-12">--signal on dark --wash</td>
                 <td className="py-3 pr-4">
                   <span
                     className="rounded-chip px-2 py-1"
@@ -251,7 +252,7 @@ export default function TokensPage() {
                 <td className="py-3 pr-4">
                   <Ratio fg={TOKENS_DARK.signal} bg={TOKENS_DARK.wash} />
                 </td>
-                <td className="py-3 text-xs text-mute">
+                <td className="py-3 text-12 text-mute">
                   Yellow is at its best on near-black.
                 </td>
               </tr>
@@ -280,7 +281,7 @@ export default function TokensPage() {
           ))}
         </div>
 
-        <h3 className="mt-6 text-xs tracking-wide text-mute">
+        <h3 className="mt-6 text-12 tracking-wide text-mute">
           Dot contrast — 3:1 non-text floor, on --paper
         </h3>
         <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -295,13 +296,13 @@ export default function TokensPage() {
                   style={{ background: hex }}
                   aria-hidden="true"
                 />
-                <span className="font-mono text-xs text-ink">--{name}</span>
+                <span className="font-mono text-12 text-ink">--{name}</span>
               </span>
               <span className="flex items-center gap-3">
-                <span className="font-mono text-xs text-mute">
+                <span className="font-mono text-12 text-mute">
                   light <Ratio fg={hex} bg={TOKENS_LIGHT.paper} use="non-text" />
                 </span>
-                <span className="font-mono text-xs text-mute">
+                <span className="font-mono text-12 text-mute">
                   dark{" "}
                   <Ratio
                     fg={STATUS_COLORS_DARK[name as keyof typeof STATUS_COLORS_DARK]}
@@ -323,25 +324,25 @@ export default function TokensPage() {
           is 12/13/14/16/20/24/32 — 18px is not reachable, because the{" "}
           <span className="font-mono">--text-*</span> namespace is cleared before
           it is redefined. Tailwind&rsquo;s stock{" "}
-          <span className="font-mono">text-lg</span> would have been 18px.
+          <span className="font-mono">text-20</span> would have been 18px.
         </p>
 
         <div className="mt-3 divide-y divide-line">
           {TYPE_SCALE.map(([cls, px, use]) => (
             <div key={cls} className="flex items-baseline gap-4 py-2.5">
-              <span className="w-20 shrink-0 font-mono text-xs text-mute">{cls}</span>
-              <span className="w-12 shrink-0 font-mono text-xs text-mute">{px}</span>
+              <span className="w-20 shrink-0 font-mono text-12 text-mute">{cls}</span>
+              <span className="w-12 shrink-0 font-mono text-12 text-mute">{px}</span>
               <span className={cls}>Attendance</span>
-              {use ? <span className="ml-auto text-xs text-mute">{use}</span> : null}
+              {use ? <span className="ml-auto text-12 text-mute">{use}</span> : null}
             </div>
           ))}
         </div>
 
-        <h3 className="mt-6 text-xs tracking-wide text-mute">
+        <h3 className="mt-6 text-12 tracking-wide text-mute">
           Tabular figures — digits must not jitter
         </h3>
         <div className="mt-2 rounded-card border border-line p-3">
-          <div className="font-mono text-sm text-ink" data-numeric>
+          <div className="font-mono text-13 text-ink" data-numeric>
             <div>CSC/2021/0417</div>
             <div>PRESENT WINDOW · 7:12 LEFT</div>
             <div>94.7%</div>
@@ -362,7 +363,7 @@ export default function TokensPage() {
         {(["default", "secondary", "outline", "ghost", "destructive", "link"] as const).map(
           (variant) => (
             <div key={variant} className="mt-4">
-              <div className="font-mono text-xs text-mute">{variant}</div>
+              <div className="font-mono text-12 text-mute">{variant}</div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Button variant={variant}>Report present</Button>
                 <Button variant={variant} size="sm">
@@ -380,7 +381,7 @@ export default function TokensPage() {
         )}
 
         <div className="mt-6">
-          <div className="font-mono text-xs text-mute">radius</div>
+          <div className="font-mono text-12 text-mute">radius</div>
           <div className="mt-2 flex flex-wrap gap-2">
             {[
               ["rounded-chip", "4px · chips"],
@@ -389,7 +390,7 @@ export default function TokensPage() {
             ].map(([cls, label]) => (
               <div
                 key={cls}
-                className={`border border-line px-3 py-6 text-xs text-mute ${cls}`}
+                className={`border border-line px-3 py-6 text-12 text-mute ${cls}`}
               >
                 {label}
               </div>
@@ -398,20 +399,20 @@ export default function TokensPage() {
         </div>
 
         <div className="mt-6">
-          <div className="font-mono text-xs text-mute">surfaces</div>
+          <div className="font-mono text-12 text-mute">surfaces</div>
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="rounded-card border border-line bg-paper p-4">
-              <div className="text-sm text-ink">Card — 1px --line, radius 8</div>
-              <div className="mt-1 text-xs text-mute">
+              <div className="text-13 text-ink">Card — 1px --line, radius 8</div>
+              <div className="mt-1 text-12 text-mute">
                 No shadow. Shadows exist only on things that float above the
                 page: popover, dialog, sheet, dropdown, toast.
               </div>
             </div>
             <div className="rounded-card border border-line bg-ink p-4">
-              <div className="text-sm text-paper">
+              <div className="text-13 text-paper">
                 Ink surface — the live session card
               </div>
-              <div className="mt-1 text-xs text-mute">
+              <div className="mt-1 text-12 text-mute">
                 Full-bleed, with the yellow hairline along its bottom edge.
                 Ships in Phase 6.
               </div>

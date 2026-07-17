@@ -635,6 +635,7 @@ export type Database = {
           present_count: number
           rejected_count: number
           student_id: string
+          unverified_count: number
           updated_at: string
         }
         Insert: {
@@ -651,6 +652,7 @@ export type Database = {
           present_count?: number
           rejected_count?: number
           student_id: string
+          unverified_count?: number
           updated_at?: string
         }
         Update: {
@@ -667,6 +669,7 @@ export type Database = {
           present_count?: number
           rejected_count?: number
           student_id?: string
+          unverified_count?: number
           updated_at?: string
         }
         Relationships: [
@@ -1710,6 +1713,7 @@ export type Database = {
           semester_id: string | null
           student_id: string | null
           student_name: string | null
+          unverified_count: number | null
           updated_at: string | null
         }
         Relationships: [
@@ -1801,6 +1805,7 @@ export type Database = {
       attendance_status:
         | "pending_verification"
         | "pending_permission_review"
+        | "unverified"
         | "present"
         | "late"
         | "permission_granted"
@@ -1962,6 +1967,7 @@ export const Constants = {
       attendance_status: [
         "pending_verification",
         "pending_permission_review",
+        "unverified",
         "present",
         "late",
         "permission_granted",

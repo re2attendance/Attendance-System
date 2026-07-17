@@ -32,9 +32,19 @@ create type public.role_scope_type as enum (
 --                       — excused leaves the percentage denominator entirely;
 --                         permission_granted stays in it. Driven by
 --                         permission_reasons.counts_as_excused.
+--
+--   unverified ≠ absent  — the student submitted on time and nobody ever
+--                         decided. See ADR-010. Charging a student for a rep's
+--                         inaction is the one place this system would make
+--                         someone lose for something they could not influence,
+--                         so it gets its own word and leaves the denominator.
+--
+-- Ordered so `order by status` groups the unresolved states together: the two
+-- pendings and their terminal form sit at the top, verdicts follow.
 create type public.attendance_status as enum (
   'pending_verification',
   'pending_permission_review',
+  'unverified',
   'present',
   'late',
   'permission_granted',
