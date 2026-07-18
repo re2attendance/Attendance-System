@@ -165,3 +165,41 @@ export const revokeRep = authedAction
     revalidatePath("/instructor/reps");
     return { id: data.id };
   });
+
+/**
+ * The enrolled students of a section, for the appoint picker.
+ *
+ * A read, run as an action so the dialog can load it on open rather than the
+ * page loading every section's roster upfront (an admin owns 20 sections of
+ * ~100). authorize is coarse — rep.appoint is true for any instructor — so the
+ * real fence is RLS: enrollments_read_section only returns rows for sections the
+ * caller administers, which means asking for someone else's roster returns
+ * nothing rather than a leak.
+ */
+export const listSectionRoster = authedAction
+  .metadata({ name: "list-section-roster", authorize: "rep.appoint" })
+  .inputSchema(z.object({ classSectionId: z.uuid() }))
+  .action(async ({ parsedInput, ctx }) => {
+    requireScope(ctx.user, "rep.appoint", {
+      type: "class_section",
+      id: parsedInput.classSectionId,
+    });
+
+    const { data, error } = await ctx.supabase
+      .from("enrollments")
+      .select(
+        "student_id, profiles!enrollments_student_id_fkey(full_name, matric_number)",
+      )
+      .eq("class_section_id", parsedInput.classSectionId)
+      .eq("status", "enrolled");
+
+    if (error) throw new AppError(`Could not load the roster: ${error.message}`);
+
+    return (data ?? [])
+      .map((e) => ({
+        id: e.student_id,
+        fullName: e.profiles?.full_name ?? "Unknown student",
+        matricNumber: e.profiles?.matric_number ?? null,
+      }))
+      .sort((a, b) => a.fullName.localeCompare(b.fullName));
+  });

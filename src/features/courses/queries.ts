@@ -21,7 +21,9 @@ export type CourseRow = {
   title: string;
   creditUnits: number;
   level: number;
+  departmentId: string;
   departmentName: string;
+  academicYearId: string;
   academicYearName: string;
   sectionCount: number;
 };
@@ -33,7 +35,7 @@ export async function listCourses(params: ListParams) {
   let query = supabase
     .from("courses")
     .select(
-      `id, code, title, credit_units, level,
+      `id, code, title, credit_units, level, department_id, academic_year_id,
        departments!inner(name),
        academic_years!inner(name),
        class_sections(count)`,
@@ -60,7 +62,9 @@ export async function listCourses(params: ListParams) {
     title: c.title,
     creditUnits: c.credit_units,
     level: c.level,
+    departmentId: c.department_id,
     departmentName: c.departments.name,
+    academicYearId: c.academic_year_id,
     academicYearName: c.academic_years.name,
     sectionCount: c.class_sections[0]?.count ?? 0,
   }));
@@ -71,9 +75,12 @@ export async function listCourses(params: ListParams) {
 export type SectionRow = {
   id: string;
   sectionCode: string;
+  courseId: string;
   courseCode: string;
   courseTitle: string;
+  semesterId: string;
   semesterName: string;
+  instructorId: string | null;
   instructorName: string | null;
   room: string | null;
   capacity: number | null;
@@ -87,10 +94,14 @@ export async function listSections(params: ListParams & { semesterId?: string })
   let query = supabase
     .from("class_sections")
     .select(
-      `id, section_code, room, capacity,
+      // profiles is disambiguated by the instructor FK: class_sections reaches
+      // profiles by more than one path (the instructor, and the enrolled
+      // students via attendance summaries), so a bare profiles() embed is
+      // ambiguous (PGRST201). The hint names the one we mean.
+      `id, section_code, room, capacity, course_id, semester_id, instructor_id,
        courses!inner(code, title),
        semesters!inner(name),
-       profiles(full_name),
+       profiles!class_sections_instructor_id_fkey(full_name),
        enrollments(count)`,
       { count: "exact" },
     );
@@ -107,9 +118,12 @@ export async function listSections(params: ListParams & { semesterId?: string })
   const rows: SectionRow[] = (data ?? []).map((s) => ({
     id: s.id,
     sectionCode: s.section_code,
+    courseId: s.course_id,
     courseCode: s.courses.code,
     courseTitle: s.courses.title,
+    semesterId: s.semester_id,
     semesterName: s.semesters.name,
+    instructorId: s.instructor_id,
     instructorName: s.profiles?.full_name ?? null,
     room: s.room,
     capacity: s.capacity,
