@@ -11,6 +11,11 @@ export const metadata: Metadata = { title: "Instructor · Attendance" };
  */
 const destinations = [
   {
+    href: "/instructor/sections",
+    title: "My sections",
+    blurb: "Set each section's schedule, generate sessions, and open or close them.",
+  },
+  {
     href: "/instructor/reps",
     title: "Course reps",
     blurb: "Appoint, hand over and revoke the reps for your sections.",
@@ -25,8 +30,8 @@ export default async function InstructorPage() {
       <div>
         <h1 className="text-24 font-semibold text-ink">Instructor</h1>
         <p className="mt-1 max-w-prose text-13 text-mute">
-          Signed in as {user.fullName}. Sessions, overrides and reports arrive in
-          later phases.
+          Signed in as {user.fullName}. Overrides and reports arrive in later
+          phases.
         </p>
       </div>
 

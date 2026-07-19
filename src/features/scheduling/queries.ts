@@ -1,6 +1,8 @@
 import "server-only";
 
 import type { ListParams } from "@/features/courses";
+import { isAdmin } from "@/lib/auth/permissions";
+import type { CurrentUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -10,12 +12,71 @@ import { createClient } from "@/lib/supabase/server";
  * own section sees everything and a stranger sees nothing.
  */
 
-export type ManagedSection = {
+export type InstructorSection = {
   id: string;
   courseCode: string;
   courseTitle: string;
   sectionCode: string;
   semesterName: string;
+  ruleCount: number;
+  openCount: number;
+};
+
+/**
+ * The sections this user manages, for the index that lists them. Scoped exactly
+ * as listRepSections is (§5, ADR-005): an instructor sees their own sections,
+ * an admin sees all. The counts are the two things worth seeing before you
+ * click in — is a schedule set up at all, and is anything open right now.
+ */
+export async function listInstructorSections(
+  user: CurrentUser,
+): Promise<InstructorSection[]> {
+  const supabase = await createClient();
+
+  let query = supabase
+    .from("class_sections")
+    .select(
+      `id, section_code,
+       courses!inner(code, title),
+       semesters!inner(name),
+       schedule_rules(count),
+       attendance_sessions(count)`,
+    )
+    // Only the open sessions count toward the "live now" badge; the embedded
+    // filter keeps that count honest without a second round-trip.
+    .eq("attendance_sessions.status", "open");
+
+  // Admin administers everything; an instructor only their own sections.
+  if (!isAdmin(user)) query = query.eq("instructor_id", user.id);
+
+  const { data, error } = await query
+    .order("code", { referencedTable: "courses" })
+    .order("section_code");
+
+  if (error) throw new Error(`listInstructorSections: ${error.message}`);
+
+  return (data ?? []).map((s) => ({
+    id: s.id,
+    courseCode: s.courses.code,
+    courseTitle: s.courses.title,
+    sectionCode: s.section_code,
+    semesterName: s.semesters.name,
+    ruleCount: s.schedule_rules[0]?.count ?? 0,
+    openCount: s.attendance_sessions[0]?.count ?? 0,
+  }));
+}
+
+export type ManagedSection = {
+  id: string;
+  instructorId: string | null;
+  courseCode: string;
+  courseTitle: string;
+  sectionCode: string;
+  semesterName: string;
+  /** The institution's timezone — the one clock the sessions were generated
+   * against (§5). The client formats stored instants back to local wall time
+   * with it, so "10:00" shows as 10:00 rather than drifting to the viewer's. */
+  timezone: string;
 };
 
 export async function getManagedSection(
@@ -24,7 +85,9 @@ export async function getManagedSection(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("class_sections")
-    .select("id, section_code, courses!inner(code, title), semesters!inner(name)")
+    .select(
+      "id, section_code, instructor_id, courses!inner(code, title), semesters!inner(name), institutions!inner(timezone)",
+    )
     .eq("id", sectionId)
     .maybeSingle();
 
@@ -33,10 +96,12 @@ export async function getManagedSection(
 
   return {
     id: data.id,
+    instructorId: data.instructor_id,
     courseCode: data.courses.code,
     courseTitle: data.courses.title,
     sectionCode: data.section_code,
     semesterName: data.semesters.name,
+    timezone: data.institutions.timezone,
   };
 }
 
