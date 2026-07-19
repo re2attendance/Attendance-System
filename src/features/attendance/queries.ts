@@ -3,7 +3,11 @@ import "server-only";
 import type { CurrentUser } from "@/lib/auth/session";
 import { isAdmin } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-import type { AttendanceStatus, SessionStatus } from "@/features/attendance/rules/types";
+import type {
+  AttendanceStatus,
+  RuleSnapshot,
+  SessionStatus,
+} from "@/features/attendance/rules/types";
 
 /**
  * RSC reads for the attendance screens. RLS-enforced throughout: a student sees
@@ -24,11 +28,11 @@ export type TodaySession = {
   /** This student's record for the session, if they have one yet. */
   myStatus: AttendanceStatus | null;
   mySubmittedAt: string | null;
-  /** The pinned rule window, so the live card can preview present/late with the
-   * same numbers the server will judge by. Never the code — students never see
-   * the code from the API; it lives only on the session display. */
-  presentWithinMinutes: number;
-  lateWithinMinutes: number;
+  /** The pinned rule window, so the live card can preview present/late/beyond
+   * with deriveStatus and the same numbers the server will judge by. Never the
+   * code — students never see the code from the API; it lives only on the
+   * session display. */
+  rules: RuleSnapshot;
 };
 
 /**
@@ -37,7 +41,9 @@ export type TodaySession = {
  * a string comparison once we know the institution's timezone — no drift to the
  * viewer's clock, which may be anywhere.
  */
-export async function listTodaySessions(user: CurrentUser): Promise<TodaySession[]> {
+export async function listTodaySessions(
+  user: CurrentUser,
+): Promise<{ timezone: string; sessions: TodaySession[] }> {
   const supabase = await createClient();
 
   const { data: inst } = await supabase
@@ -55,7 +61,7 @@ export async function listTodaySessions(user: CurrentUser): Promise<TodaySession
     .select(
       `id, starts_at, ends_at, status, room,
        class_sections!inner(section_code, courses!inner(code, title)),
-       attendance_rule_snapshots!inner(present_within_minutes, late_within_minutes),
+       attendance_rule_snapshots!inner(present_within_minutes, late_within_minutes, beyond_late_window),
        attendance_records(status, submitted_at)`,
     )
     .eq("session_date", today)
@@ -63,7 +69,7 @@ export async function listTodaySessions(user: CurrentUser): Promise<TodaySession
 
   if (error) throw new Error(`listTodaySessions: ${error.message}`);
 
-  return (data ?? []).map((s) => {
+  const sessions = (data ?? []).map((s) => {
     // The embedded records are RLS-filtered to this student's own, so there is
     // at most one — their record for this session.
     const mine = s.attendance_records[0] ?? null;
@@ -78,10 +84,77 @@ export async function listTodaySessions(user: CurrentUser): Promise<TodaySession
       sessionStatus: s.status,
       myStatus: mine?.status ?? null,
       mySubmittedAt: mine?.submitted_at ?? null,
-      presentWithinMinutes: s.attendance_rule_snapshots.present_within_minutes,
-      lateWithinMinutes: s.attendance_rule_snapshots.late_within_minutes,
+      rules: {
+        presentWithinMinutes: s.attendance_rule_snapshots.present_within_minutes,
+        lateWithinMinutes: s.attendance_rule_snapshots.late_within_minutes,
+        beyondLateWindow: s.attendance_rule_snapshots.beyond_late_window,
+      },
     };
   });
+
+  return { timezone: tz, sessions };
+}
+
+export type RepSession = {
+  id: string;
+  courseCode: string;
+  sectionCode: string;
+  room: string | null;
+  startsAt: string;
+  endsAt: string;
+  sessionStatus: SessionStatus;
+  pendingCount: number;
+};
+
+/**
+ * Today's sessions in the sections this rep is appointed to — the way into each
+ * one's verify queue. Scoped to repSectionIds (a live appointment, §4), so an
+ * expired rep sees nothing here even though sessions_read might still let them
+ * read the rows. The pending count is the one number that decides whether a rep
+ * needs to act, so it leads.
+ */
+export async function listRepSessions(
+  user: CurrentUser,
+): Promise<{ timezone: string; sessions: RepSession[] }> {
+  const supabase = await createClient();
+
+  if (user.repSectionIds.length === 0) return { timezone: "UTC", sessions: [] };
+
+  const { data: inst } = await supabase
+    .from("institutions")
+    .select("timezone")
+    .eq("id", user.institutionId)
+    .single();
+  const tz = inst?.timezone ?? "UTC";
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
+
+  const { data, error } = await supabase
+    .from("attendance_sessions")
+    .select(
+      `id, starts_at, ends_at, status, room,
+       class_sections!inner(section_code, courses!inner(code, title)),
+       attendance_records(count)`,
+    )
+    .in("class_section_id", user.repSectionIds)
+    .eq("session_date", today)
+    // The embedded count is pending requests only — the queue's backlog.
+    .eq("attendance_records.status", "pending_verification")
+    .order("starts_at");
+
+  if (error) throw new Error(`listRepSessions: ${error.message}`);
+
+  const sessions = (data ?? []).map((s) => ({
+    id: s.id,
+    courseCode: s.class_sections.courses.code,
+    sectionCode: s.class_sections.section_code,
+    room: s.room,
+    startsAt: s.starts_at,
+    endsAt: s.ends_at,
+    sessionStatus: s.status,
+    pendingCount: s.attendance_records[0]?.count ?? 0,
+  }));
+
+  return { timezone: tz, sessions };
 }
 
 export type VerifyContext = {
@@ -93,6 +166,7 @@ export type VerifyContext = {
   sessionStatus: SessionStatus;
   startsAt: string;
   endsAt: string;
+  timezone: string;
 };
 
 /**
@@ -112,7 +186,7 @@ export async function getVerifyContext(
     .from("attendance_sessions")
     .select(
       `id, class_section_id, status, starts_at, ends_at,
-       class_sections!inner(section_code, instructor_id, courses!inner(code, title))`,
+       class_sections!inner(section_code, instructor_id, courses!inner(code, title), institutions!inner(timezone))`,
     )
     .eq("id", sessionId)
     .maybeSingle();
@@ -135,6 +209,7 @@ export async function getVerifyContext(
     sessionStatus: data.status,
     startsAt: data.starts_at,
     endsAt: data.ends_at,
+    timezone: data.class_sections.institutions.timezone,
   };
 }
 

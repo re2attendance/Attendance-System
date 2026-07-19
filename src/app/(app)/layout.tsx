@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/layout/app-shell";
+import { QueryProvider } from "@/components/query-provider";
 import { requireUser } from "@/lib/auth/session";
 
 /* The signed-in shell. requireUser() redirects to /login if there is no
@@ -11,5 +12,9 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const user = await requireUser();
-  return <AppShell user={user}>{children}</AppShell>;
+  return (
+    <QueryProvider>
+      <AppShell user={user}>{children}</AppShell>
+    </QueryProvider>
+  );
 }
