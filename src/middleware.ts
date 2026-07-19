@@ -53,6 +53,13 @@ export async function middleware(request: NextRequest) {
   // stops being true by week three.
   if (pathname.startsWith("/dev/")) return response;
 
+  // /api/cron/* is machine-called by the scheduler with a bearer token, not a
+  // browser session. Bouncing a tokened, sessionless request to an HTML /login
+  // page turns a cron tick into a 307 that closes nothing; the handler
+  // authenticates itself against CRON_SECRET, so the session guard has no job
+  // here (ADR-005: this file is UX, the route owns its own boundary).
+  if (pathname.startsWith("/api/cron/")) return response;
+
   if (!user && !isPublic(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

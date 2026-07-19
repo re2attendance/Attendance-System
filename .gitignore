@@ -42,5 +42,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# claude code — local permission grants, not shared
+# claude code — local permission grants and scratch worktrees, not shared
 .claude/settings.local.json
+.claude/worktrees/

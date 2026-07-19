@@ -32,6 +32,10 @@ export const env = clientSchema.parse({
 
 const serverSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+  // Guards the cron routes (app/api/cron/*). Anyone who finds the URL but not
+  // this cannot make the close job run. Min length is a floor against an empty
+  // string sneaking through as "set".
+  CRON_SECRET: z.string().min(16, "CRON_SECRET must be at least 16 characters."),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
 
@@ -57,6 +61,7 @@ export function serverEnv() {
 
   return serverSchema.parse({
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    CRON_SECRET: process.env.CRON_SECRET,
     NODE_ENV: process.env.NODE_ENV,
   });
 }

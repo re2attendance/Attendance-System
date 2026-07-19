@@ -1832,6 +1832,17 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: boolean
       }
+      cancel_session: {
+        Args: { p_reason: string; p_session_id: string }
+        Returns: undefined
+      }
+      close_due_sessions: {
+        Args: never
+        Returns: {
+          absences: number
+          closed: number
+        }[]
+      }
       close_session: {
         Args: { p_session_id: string }
         Returns: {
@@ -1853,6 +1864,10 @@ export type Database = {
           records_voided: number
           sessions_cancelled: number
         }[]
+      }
+      generate_sessions: {
+        Args: { p_class_section_id: string; p_from: string; p_to: string }
+        Returns: number
       }
       get_invitation_by_token_hash: {
         Args: { p_token_hash: string }
@@ -1887,9 +1902,14 @@ export type Database = {
         }
         Returns: number
       }
+      open_session: { Args: { p_session_id: string }; Returns: undefined }
       recalc_attendance_summary: {
         Args: { p_class_section_id: string; p_student_id: string }
         Returns: undefined
+      }
+      resolve_rule_snapshot: {
+        Args: { p_class_section_id: string }
+        Returns: string
       }
     }
     Enums: {
