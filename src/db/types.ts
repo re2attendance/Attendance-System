@@ -1795,6 +1795,14 @@ export type Database = {
         Args: { p_full_name: string; p_token_hash: string }
         Returns: string
       }
+      attendance_decide_one: {
+        Args: {
+          p_decision: Database["public"]["Enums"]["attendance_decision"]
+          p_record_id: string
+          p_status: Database["public"]["Enums"]["attendance_status"]
+        }
+        Returns: string
+      }
       auth_can_administer_section: {
         Args: { p_section_id: string }
         Returns: boolean
@@ -1848,6 +1856,28 @@ export type Database = {
         Returns: {
           absences_written: number
           pending_swept: number
+        }[]
+      }
+      decide_attendance: {
+        Args: {
+          p_decision: Database["public"]["Enums"]["attendance_decision"]
+          p_record_id: string
+          p_status: Database["public"]["Enums"]["attendance_status"]
+        }
+        Returns: {
+          record_id: string
+          status: Database["public"]["Enums"]["attendance_status"]
+          was_already_decided: boolean
+        }[]
+      }
+      decide_attendance_bulk: {
+        Args: {
+          p_decision: Database["public"]["Enums"]["attendance_decision"]
+          p_items: Json
+        }
+        Returns: {
+          decided: number
+          skipped: number
         }[]
       }
       declare_calendar_event: {
@@ -1907,9 +1937,29 @@ export type Database = {
         Args: { p_class_section_id: string; p_student_id: string }
         Returns: undefined
       }
+      report_present: {
+        Args: {
+          p_code: string
+          p_device_fingerprint?: string
+          p_ip?: unknown
+          p_session_id: string
+        }
+        Returns: {
+          record_id: string
+          status: Database["public"]["Enums"]["attendance_status"]
+        }[]
+      }
       resolve_rule_snapshot: {
         Args: { p_class_section_id: string }
         Returns: string
+      }
+      rotate_session_code: {
+        Args: { p_session_id: string }
+        Returns: {
+          code: string
+          rotated_at: string
+          seconds_remaining: number
+        }[]
       }
     }
     Enums: {
