@@ -196,11 +196,13 @@ grant execute on function public.generate_sessions(uuid, date, date) to authenti
 
 -- ── open_session ─────────────────────────────────────────────────────────────
 --
--- Move a scheduled session to 'open' and arm the anti-proxy code. The
--- sessions_open_has_code constraint requires session_code + code_rotated_at
--- together, so both are set here; the 30-second rotation and validation are the
--- verifier's job (Phase 6). A hand-created session that never went through
--- generate_sessions has no snapshot yet, so one is pinned on the way in.
+-- Move a scheduled session to 'open'. A hand-created session that never went
+-- through generate_sessions has no snapshot yet, so one is pinned on the way in
+-- — status derivation depends on it.
+--
+-- (An anti-proxy code was armed here originally; it was removed as a product
+-- decision, since there is no display to project a rotating code and the rep
+-- verifies presence manually.)
 create or replace function public.open_session(p_session_id uuid)
 returns void
 language plpgsql
@@ -240,12 +242,7 @@ begin
   set status = 'open',
       opened_at = now(),
       opened_by = (select auth.uid()),
-      rules_snapshot_id = v_snapshot_id,
-      -- 6 digits, zero-padded. gen_random_bytes would do; a modulo of a random
-      -- bigint is enough for a code that rotates every 30s and is validated
-      -- server-side, never a secret at rest.
-      session_code = lpad((floor(random() * 1000000))::int::text, 6, '0'),
-      code_rotated_at = now()
+      rules_snapshot_id = v_snapshot_id
   where id = p_session_id;
 end;
 $$;

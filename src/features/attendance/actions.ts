@@ -12,7 +12,6 @@ import {
   decideAttendanceBulkSchema,
   decideAttendanceSchema,
   reportPresentSchema,
-  rotateSessionCodeSchema,
 } from "./schemas";
 
 /**
@@ -51,16 +50,15 @@ export const reportPresent = authedAction
     const { data, error } = await ctx.supabase
       .rpc("report_present", {
         p_session_id: parsedInput.sessionId,
-        p_code: parsedInput.code,
         p_device_fingerprint: parsedInput.deviceFingerprint ?? undefined,
         p_ip: (await clientIp()) ?? undefined,
       })
       .single();
 
     if (error) {
-      // report_present raises person-readable messages (wrong code, not open,
-      // not enrolled). Pass them through; only strip the internal prefix that
-      // the not-found/technical raises carry.
+      // report_present raises person-readable messages (not open, not enrolled).
+      // Pass them through; only strip the internal prefix that the not-found /
+      // technical raises carry.
       throw new AppError(error.message.replace(/^report_present: /, ""));
     }
 
@@ -183,26 +181,4 @@ export const decideAttendanceBulk = authedAction
 
     revalidatePath(`/rep/sessions/${parsedInput.sessionId}`);
     return { decided: data.decided, skipped: data.skipped };
-  });
-
-export const rotateSessionCode = authedAction
-  .metadata({ name: "rotate-session-code" })
-  .inputSchema(rotateSessionCodeSchema)
-  .action(async ({ parsedInput, ctx }) => {
-    requireScope(ctx.user, "session.manage", {
-      type: "class_section",
-      id: parsedInput.classSectionId,
-    });
-
-    const { data, error } = await ctx.supabase
-      .rpc("rotate_session_code", { p_session_id: parsedInput.sessionId })
-      .single();
-
-    if (error) throw new AppError(error.message.replace(/^rotate_session_code: /, ""));
-
-    return {
-      code: data.code,
-      rotatedAt: data.rotated_at,
-      secondsRemaining: data.seconds_remaining,
-    };
   });

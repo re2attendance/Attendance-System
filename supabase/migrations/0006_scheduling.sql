@@ -81,11 +81,12 @@ create table public.attendance_sessions (
 
   generated_from_schedule_rule_id uuid references public.schedule_rules (id) on delete set null,
 
-  -- §7 layer 1: rotating 6-digit code, regenerated every 30s, validated
-  -- server-side against server time. Stored as the CURRENT code; the previous
-  -- one is accepted for one rotation (a student typing on a cracked phone in a
-  -- lecture hall should not lose a record to a 2-second overrun), which the
-  -- verifier derives from code_rotated_at rather than a second column.
+  -- Reserved, unused. A rotating 6-digit code was modelled here as an anti-proxy
+  -- possession factor, then removed as a product decision: with no display to
+  -- project a rotating code to a hall, verification rests on the rep's manual
+  -- approval (and the shared-device flag), not a code every student types. The
+  -- columns are kept nullable so re-introducing the factor later needs no
+  -- migration; nothing writes or reads them now.
   session_code text check (session_code ~ '^[0-9]{6}$'),
   code_rotated_at timestamptz,
 
@@ -131,12 +132,6 @@ create table public.attendance_sessions (
   ),
   constraint sessions_close_after_open check (
     closed_at is null or opened_at is null or closed_at >= opened_at
-  ),
-
-  -- An open session must have a code and a rotation stamp, or the anti-proxy
-  -- layer is silently inert.
-  constraint sessions_open_has_code check (
-    status <> 'open' or (session_code is not null and code_rotated_at is not null)
   )
 );
 

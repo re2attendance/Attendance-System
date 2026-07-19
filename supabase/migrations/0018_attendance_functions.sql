@@ -1,11 +1,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 0018 — Attendance write functions (Phase 6)
 --
--- The three writes the ledger turns on: a student reporting present, a rep/
--- instructor rotating the anti-proxy code they display, and a rep/instructor
--- deciding a claim. The tables (0007), the rule snapshots (0008/0017), the auth
--- helpers (0010), and the session lifecycle (0017) already exist; this is the
--- layer that lets people write to the ledger through them.
+-- The two writes the ledger turns on: a student reporting present, and a rep/
+-- instructor deciding a claim. The tables (0007), the rule snapshots (0008/0017),
+-- the auth helpers (0010), and the session lifecycle (0017) already exist; this
+-- is the layer that lets people write to the ledger through them.
 --
 -- Two things stay OUT of this file on purpose:
 --
@@ -21,20 +20,20 @@
 --   · RLS. records_insert_own and records_decide_section (0011) already permit
 --     exactly these writes. report_present could be a plain insert and decide a
 --     plain update. They are SECURITY DEFINER functions instead because each
---     needs something RLS cannot give a single statement: code validation
---     against the live rotation, anti-proxy flagging that reads OTHER students'
---     rows, idempotency against the unique constraint, and a FOR UPDATE lock so
---     two reps deciding at once cannot both win. The authorisation each bypasses
---     is re-checked here explicitly.
+--     needs something RLS cannot give a single statement: anti-proxy flagging
+--     that reads OTHER students' rows, idempotency against the unique constraint,
+--     and a FOR UPDATE lock so two reps deciding at once cannot both win. The
+--     authorisation each bypasses is re-checked here explicitly.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 
 -- ── report_present ───────────────────────────────────────────────────────────
 --
--- A student's claim that they are in the room. Validates the possession factor
--- (the rotating code shown on the session display), binds the submission to a
--- device, flags a shared device, and pins the rule snapshot the record will be
--- judged against.
+-- A student's claim that they are in the room. Binds the submission to a device,
+-- flags a shared device, and pins the rule snapshot the record will be judged
+-- against. The rep's manual approval is what turns the claim into a verdict —
+-- there is no code to type (a possession-code factor was removed; nothing here
+-- gates on being able to read a display).
 --
 -- IDEMPOTENT. §6 risk 6: the offline queue is the easiest place to create a
 -- duplicate submission, and unique (student_id, session_id) is the backstop. A
@@ -48,7 +47,6 @@
 -- adjudicate it silently.
 create or replace function public.report_present(
   p_session_id uuid,
-  p_code text,
   p_device_fingerprint text default null,
   p_ip inet default null
 )
@@ -90,15 +88,6 @@ begin
 
   if public.auth_section_is_finalized(v_session.class_section_id) then
     raise exception 'This section is finalised; its attendance can no longer change.';
-  end if;
-
-  -- The possession factor. Compared trimmed and case-folded so a stray space or
-  -- a phone that helpfully upper-cased nothing (codes are digits, but be kind)
-  -- does not read as a wrong code. A non-secret at rest: the code is only ever a
-  -- proof you could see the display in the last rotation, and it rotates.
-  if v_session.session_code is null
-     or btrim(lower(p_code)) is distinct from lower(v_session.session_code) then
-    raise exception 'That attendance code is not correct. Check the code on the screen and try again.';
   end if;
 
   -- Idempotency, checked before the insert so a retry is cheap and never touches
@@ -165,71 +154,8 @@ begin
 end;
 $$;
 
-revoke all on function public.report_present(uuid, text, text, inet) from public;
-grant execute on function public.report_present(uuid, text, text, inet) to authenticated;
-
-
--- ── rotate_session_code ──────────────────────────────────────────────────────
---
--- The rotation is display-driven. The rep/instructor verify screen polls this
--- while a session is open; it rotates the code at most once per ROTATION_SECONDS
--- no matter how often it is polled, and hands back the current code plus the
--- seconds left on it so the display can show a countdown. A student in the room
--- reads whatever is current; report_present accepts only that.
---
--- Only a section's administrators may call it — the code is theirs to show, and
--- letting a student read it would defeat the possession factor entirely.
-create or replace function public.rotate_session_code(p_session_id uuid)
-returns table (code text, rotated_at timestamptz, seconds_remaining integer)
-language plpgsql
-security definer
-set search_path = public, pg_temp
-as $$
-declare
-  rotation_seconds constant integer := 30;
-  v_session public.attendance_sessions;
-  v_age numeric;
-begin
-  select * into v_session
-  from public.attendance_sessions
-  where id = p_session_id
-  for update;
-
-  if not found then
-    raise exception 'rotate_session_code: session % does not exist', p_session_id;
-  end if;
-
-  if not public.auth_can_administer_section(v_session.class_section_id) then
-    raise exception 'rotate_session_code: not authorised for section %', v_session.class_section_id
-      using errcode = 'insufficient_privilege';
-  end if;
-
-  if v_session.status <> 'open' then
-    raise exception 'rotate_session_code: session % is %, only an open session has a code',
-      p_session_id, v_session.status;
-  end if;
-
-  v_age := extract(epoch from now() - v_session.code_rotated_at);
-
-  if v_session.session_code is null or v_age >= rotation_seconds then
-    update public.attendance_sessions
-    set session_code = lpad((floor(random() * 1000000))::int::text, 6, '0'),
-        code_rotated_at = now()
-    where id = p_session_id
-    returning attendance_sessions.session_code, attendance_sessions.code_rotated_at
-      into v_session.session_code, v_session.code_rotated_at;
-    v_age := 0;
-  end if;
-
-  return query select
-    v_session.session_code,
-    v_session.code_rotated_at,
-    greatest(0, rotation_seconds - floor(v_age)::integer);
-end;
-$$;
-
-revoke all on function public.rotate_session_code(uuid) from public;
-grant execute on function public.rotate_session_code(uuid) to authenticated;
+revoke all on function public.report_present(uuid, text, inet) from public;
+grant execute on function public.report_present(uuid, text, inet) to authenticated;
 
 
 -- ── attendance_decide_one ────────────────────────────────────────────────────
@@ -432,42 +358,6 @@ revoke all on function public.decide_attendance_bulk(jsonb, public.attendance_de
 grant execute on function public.decide_attendance_bulk(jsonb, public.attendance_decision) to authenticated;
 
 
--- ── The code is a secret-in-the-room ─────────────────────────────────────────
---
--- sessions_read (0011) lets an enrolled student read the session row so they can
--- see today's class. But the row carries session_code, and a student who can
--- SELECT the code does not need to BE in the room to submit — which is the whole
--- point of the possession factor (ADR-003). Row security cannot help here: the
--- student is allowed the row, just not that one column.
---
--- So take the column away from everyone. A bare column REVOKE does not do this —
--- table-level SELECT implicitly covers every column, and revoking one column
--- while the table grant stands leaves the privilege in place. The only way to
--- withhold a column is to revoke the table grant and re-grant the columns you DO
--- want. After this, the ONLY reads of session_code are report_present (which
--- validates it) and rotate_session_code (which shows it to a section's
--- administrators) — both SECURITY DEFINER, both reading it as the function
--- owner, neither handing it to a student. code_rotated_at stays readable: a bare
--- timestamp reveals nothing without the code.
---
--- anon has no grant on this table (0014) and gets none here. The column list is
--- resolved at migration time; a future column is readable only once a later
--- migration grants it, which is the safe default for a table with a secret in it.
-do $$
-declare
-  v_cols text;
-begin
-  select string_agg(quote_ident(column_name), ', ')
-  into v_cols
-  from information_schema.columns
-  where table_schema = 'public'
-    and table_name = 'attendance_sessions'
-    and column_name <> 'session_code';
-
-  revoke select on public.attendance_sessions from authenticated;
-  execute format('grant select (%s) on public.attendance_sessions to authenticated', v_cols);
-end $$;
-
 -- ── Realtime ─────────────────────────────────────────────────────────────────
 --
 -- The rep queue is fed by Supabase Realtime (§2.1): a new submission appears in
@@ -476,9 +366,7 @@ end $$;
 -- their own. Publishing is not a new grant; records_read_* (0011) still decides
 -- every row.
 --
--- attendance_sessions is deliberately NOT published. A realtime change payload
--- carries the whole row, column revokes and all — so publishing it would stream
--- session_code to every enrolled subscriber on each 30-second rotation, undoing
--- the revoke directly above. The student's live card needs no realtime: it
--- counts down locally from a server anchor and reconciles on navigation.
+-- Only attendance_records is published — the student's live card needs no
+-- realtime (it counts down locally from a server anchor), and the queue is the
+-- one surface that must be live.
 alter publication supabase_realtime add table public.attendance_records;

@@ -1939,7 +1939,6 @@ export type Database = {
       }
       report_present: {
         Args: {
-          p_code: string
           p_device_fingerprint?: string
           p_ip?: unknown
           p_session_id: string
@@ -1952,14 +1951,6 @@ export type Database = {
       resolve_rule_snapshot: {
         Args: { p_class_section_id: string }
         Returns: string
-      }
-      rotate_session_code: {
-        Args: { p_session_id: string }
-        Returns: {
-          code: string
-          rotated_at: string
-          seconds_remaining: number
-        }[]
       }
     }
     Enums: {

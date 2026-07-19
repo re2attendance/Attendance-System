@@ -5,13 +5,6 @@ import { useAction } from "next-safe-action/hooks";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Field } from "@/components/ui/field";
 import { StatusChip } from "@/components/ui/status-chip";
 import { reportPresent } from "../actions";
 import { deviceFingerprint } from "../device";
@@ -47,7 +40,23 @@ export function LiveSessionCard({
 
   // A status the student sees immediately on submit, before the RSC revalidates.
   const [optimisticStatus, setOptimisticStatus] = useState<AttendanceStatus | null>(null);
-  const [codeOpen, setCodeOpen] = useState(false);
+
+  const report = useAction(reportPresent, {
+    onSuccess({ data }) {
+      if (!data) return;
+      // Idempotent server-side: a retry returns the existing record, so a double
+      // tap or an offline replay lands here with the same status, not an error.
+      toast.success(
+        data.status === "pending_verification"
+          ? "Reported. Your rep will confirm it."
+          : "You already reported for this session.",
+      );
+      setOptimisticStatus(data.status as AttendanceStatus);
+    },
+    onError({ error }) {
+      toast.error(error.serverError ?? "Could not report attendance.");
+    },
+  });
 
   const start = useMemo(() => new Date(session.startsAt).getTime(), [session.startsAt]);
   const end = useMemo(() => new Date(session.endsAt).getTime(), [session.endsAt]);
@@ -115,7 +124,13 @@ export function LiveSessionCard({
             predicted={predicted}
             secsLeftInPresent={secsLeftInPresent}
             secsLeftInLate={secsLeftInLate}
-            onReport={() => setCodeOpen(true)}
+            reporting={report.isPending}
+            onReport={() =>
+              report.execute({
+                sessionId: session.id,
+                deviceFingerprint: deviceFingerprint(),
+              })
+            }
           />
         ) : session.sessionStatus === "scheduled" ? (
           <p className="text-13 text-mute">
@@ -140,16 +155,6 @@ export function LiveSessionCard({
           style={{ width: `${progress * 100}%` }}
         />
       ) : null}
-
-      <CodeDialog
-        open={codeOpen}
-        onClose={() => setCodeOpen(false)}
-        sessionId={session.id}
-        onReported={(status) => {
-          setOptimisticStatus(status);
-          setCodeOpen(false);
-        }}
-      />
     </li>
   );
 }
@@ -177,12 +182,14 @@ function LiveControls({
   predicted,
   secsLeftInPresent,
   secsLeftInLate,
+  reporting,
   onReport,
 }: {
   phase: "present" | "late" | "beyond";
   predicted: AttendanceStatus;
   secsLeftInPresent: number;
   secsLeftInLate: number;
+  reporting: boolean;
   onReport: () => void;
 }) {
   return (
@@ -212,90 +219,10 @@ function LiveControls({
         </div>
       </div>
 
-      <Button className="w-full" onClick={onReport}>
-        Report present
+      <Button className="w-full" onClick={onReport} disabled={reporting}>
+        {reporting ? "Reporting…" : "Report present"}
       </Button>
     </div>
-  );
-}
-
-function CodeDialog({
-  open,
-  onClose,
-  sessionId,
-  onReported,
-}: {
-  open: boolean;
-  onClose: () => void;
-  sessionId: string;
-  onReported: (status: AttendanceStatus) => void;
-}) {
-  const [code, setCode] = useState("");
-
-  const report = useAction(reportPresent, {
-    onSuccess({ data }) {
-      if (!data) return;
-      // Idempotent server-side: a retry returns the existing record, so a double
-      // tap or an offline replay lands here with the same status, not an error.
-      if (data.status === "pending_verification") {
-        toast.success("Reported. Your rep will confirm it.");
-      } else {
-        toast.success("You already reported for this session.");
-      }
-      onReported(data.status as AttendanceStatus);
-      setCode("");
-    },
-    onError({ error }) {
-      toast.error(error.serverError ?? "Could not report attendance.");
-    },
-  });
-
-  const canSubmit = code.trim().length > 0 && !report.isPending;
-
-  function submit() {
-    report.execute({
-      sessionId,
-      code: code.trim(),
-      deviceFingerprint: deviceFingerprint(),
-    });
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => (o ? undefined : onClose())}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Report present</DialogTitle>
-        </DialogHeader>
-
-        <div className="grid gap-4">
-          <Field
-            label="Attendance code"
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            placeholder="6-digit code on the screen"
-            hint="Ask your rep if you can't see it."
-            // Big, thumb-friendly, monospaced — this is the one input on a phone
-            // in a full lecture hall.
-            className="[&_input]:h-12 [&_input]:font-mono [&_input]:text-18 [&_input]:tracking-[0.4em]"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && canSubmit) submit();
-            }}
-          />
-
-          <div className="flex items-center justify-end gap-3">
-            <Button variant="outline" onClick={onClose} disabled={report.isPending}>
-              Cancel
-            </Button>
-            <Button onClick={submit} disabled={!canSubmit}>
-              {report.isPending ? "Reporting…" : "Report present"}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
 

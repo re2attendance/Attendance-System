@@ -17,26 +17,26 @@ begin;
 create extension if not exists pgtap with schema extensions;
 \ir helpers.sql
 
-select plan(26);
+select plan(21);
 
 select tests.seed_fixture();
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- report_present — idempotency and the code gate
+-- report_present — idempotency
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- student_1 already has record_s1 in the fixture. A resubmit with the right code
--- returns THAT record, unchanged — the offline-queue retry contract (§6 risk 6).
+-- student_1 already has record_s1 in the fixture. A resubmit returns THAT record,
+-- unchanged — the offline-queue retry contract (§6 risk 6).
 select tests.set_auth_user(tests.uid('student_1'));
 
 select is(
-  (select record_id from public.report_present(tests.uid('session_a_open'), '123456')),
+  (select record_id from public.report_present(tests.uid('session_a_open'))),
   tests.uid('record_s1'),
   'report_present returns the existing record for a student who already submitted'
 );
 
 select lives_ok(
-  $$ select public.report_present(tests.uid('session_a_open'), '123456') $$,
+  $$ select public.report_present(tests.uid('session_a_open')) $$,
   'a second report_present does not error'
 );
 
@@ -49,30 +49,11 @@ select is(
 
 select tests.clear_auth();
 
--- Wrong code is refused. The code check precedes idempotency, so even a student
--- with a record cannot "resubmit" with a bad code and must present a right one.
-select tests.set_auth_user(tests.uid('student_2'));
-
-select throws_ok(
-  $$ select public.report_present(tests.uid('session_a_open'), '000000') $$,
-  null, null,
-  'a wrong attendance code is refused'
-);
-
-select is(
-  (select status from public.attendance_records
-   where student_id = tests.uid('student_2') and session_id = tests.uid('session_a_open')),
-  'pending_verification'::public.attendance_status,
-  'and the wrong-code attempt changed nothing about the existing record'
-);
-
-select tests.clear_auth();
-
 -- A first-time submitter (corep_a is enrolled but has no record yet) creates one.
 select tests.set_auth_user(tests.uid('corep_a'));
 
 select is(
-  (select status from public.report_present(tests.uid('session_a_open'), '123456')),
+  (select status from public.report_present(tests.uid('session_a_open'))),
   'pending_verification'::public.attendance_status,
   'a first-time submit creates a pending_verification record'
 );
@@ -85,7 +66,7 @@ select is(
 );
 
 select is(
-  (select record_id from public.report_present(tests.uid('session_a_open'), '123456')),
+  (select record_id from public.report_present(tests.uid('session_a_open'))),
   (select id from public.attendance_records
    where student_id = tests.uid('corep_a') and session_id = tests.uid('session_a_open')),
   'a repeat submit returns that same record rather than making a second'
@@ -93,11 +74,11 @@ select is(
 
 select tests.clear_auth();
 
--- A student enrolled in nothing cannot submit, even with the right code.
+-- A student enrolled in nothing cannot submit.
 select tests.set_auth_user(tests.uid('outsider'));
 
 select throws_ok(
-  $$ select public.report_present(tests.uid('session_a_open'), '123456') $$,
+  $$ select public.report_present(tests.uid('session_a_open')) $$,
   '42501', null,
   'a student not enrolled in the section is refused'
 );
@@ -230,36 +211,6 @@ select is(
   (select status from public.attendance_records where id = tests.uid('record_rep_a')),
   'pending_verification'::public.attendance_status,
   'the conflict row is never touched by a bulk either'
-);
-
-select tests.clear_auth();
-
--- ─────────────────────────────────────────────────────────────────────────────
--- rotate_session_code — the display's, not the student's
--- ─────────────────────────────────────────────────────────────────────────────
-
-select tests.set_auth_user(tests.uid('corep_a'));
-
-select is(
-  (select length(code) from public.rotate_session_code(tests.uid('session_a_open'))),
-  6,
-  'a section administrator gets a six-digit code'
-);
-
-select ok(
-  (select seconds_remaining from public.rotate_session_code(tests.uid('session_a_open'))) between 0 and 30,
-  'with a rotation countdown in range'
-);
-
-select tests.clear_auth();
-
--- A plain student may not read the code — that would defeat the possession factor.
-select tests.set_auth_user(tests.uid('student_1'));
-
-select throws_ok(
-  $$ select public.rotate_session_code(tests.uid('session_a_open')) $$,
-  '42501', null,
-  'a student cannot rotate or read a session code'
 );
 
 select tests.clear_auth();

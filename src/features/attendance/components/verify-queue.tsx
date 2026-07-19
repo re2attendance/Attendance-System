@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { decideAttendance, decideAttendanceBulk } from "../actions";
 import type { QueueRecord, VerifyContext } from "../queries";
-import { CodeDisplay } from "./code-display";
 
 /**
  * The rep verify queue — the screen a rep lives in for the length of a class.
@@ -137,10 +136,13 @@ export function VerifyQueue({
       </div>
 
       {context.sessionStatus === "open" ? (
-        <CodeDisplay
-          sessionId={context.sessionId}
-          classSectionId={classSectionId}
-        />
+        <div className="flex items-center gap-2 rounded-card border border-line p-4 text-13 text-mute">
+          <span
+            aria-hidden
+            className="size-1.5 rounded-full bg-status-present motion-safe:animate-pulse"
+          />
+          Session is open — approve students as they report in.
+        </div>
       ) : (
         <div className="rounded-card border border-line p-4 text-13 text-mute">
           This session is {context.sessionStatus}. You can still clear any

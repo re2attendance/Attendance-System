@@ -6,13 +6,11 @@ export {
   reportPresent,
   decideAttendance,
   decideAttendanceBulk,
-  rotateSessionCode,
 } from "./actions";
 export {
   reportPresentSchema,
   decideAttendanceSchema,
   decideAttendanceBulkSchema,
-  rotateSessionCodeSchema,
   type ReportPresentInput,
   type DecideAttendanceInput,
   type DecideAttendanceBulkInput,
