@@ -1072,3 +1072,29 @@ What was done instead, which addresses most of the cost:
 
 **Ask UPSA's communications office for the official vector.** Until it arrives this is the
 right asset, and swapping it later is a one-file change.
+
+### D-079 — The admin grant is conditional, not fatal — amending D-063 ✅ DONE
+
+D-063 chose "dashboard user, then a migration grants the role, **raising if it matches
+nothing** so it cannot silently no-op". The raising half does not survive contact with the
+rest of the system, and this only became visible when the migration was written.
+
+Migrations run on **every** environment. `auth.users` is per-environment. A migration that
+hard-fails when the owner's account is absent breaks `supabase db reset` on every developer
+machine and fails the `database` CI job on every pull request — because neither has, or
+should have, that account in it.
+
+So `0020` is conditional and loud: in production the account exists and the role is granted
+on deploy; everywhere else it raises a `NOTICE` and returns. D-063's intent survives — the
+grant is in git, reviewable and reproducible — while the mechanism now suits the fact that
+**identities are data, not schema**.
+
+Both paths were exercised before merge rather than assumed: with the account absent it
+no-ops and the 134-assertion suite still passes; with an account of that address present it
+grants exactly one global, live admin row, and a second run reports "already held" and
+changes nothing.
+
+The cost, stated plainly: **the account must exist before this migration runs.** Branching
+applies it on merge to `main`; if the account is not there yet, nothing is granted and the
+statement has to be re-run by hand. That is why this pull request is being held rather than
+merged with the rest of the seed work.
