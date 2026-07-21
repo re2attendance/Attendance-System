@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export const metadata = { title: "Check your email · Attendance" };
+export const metadata = { title: "Check your email · UPSA Attendance" };
 
 export default async function CheckEmailPage({
   searchParams,

@@ -20,7 +20,7 @@ export default function AuthLayout({ children }: Readonly<{ children: React.Reac
         <Link
           href="/"
           className="inline-flex items-center gap-2.5 rounded-lg"
-          aria-label="Attendance, home"
+          aria-label="UPSA Attendance, home"
         >
           <Image
             src="/upsa-crest.png"
@@ -30,7 +30,16 @@ export default function AuthLayout({ children }: Readonly<{ children: React.Reac
             priority
             className="h-11 w-auto"
           />
-          <span className="text-ink text-[0.9375rem] font-bold tracking-tight">Attendance</span>
+          {/* Stacked, and deliberately tight: two lines of leading-none at these sizes come
+              to about 30px, so the lockup still sits inside the crest's 44px and the header
+              height does not change. UPSA is the institution and carries the weight;
+              Attendance is the product and steps back a shade. */}
+          <span className="flex flex-col leading-none">
+            <span className="text-ink text-[0.9375rem] font-extrabold tracking-tight">UPSA</span>
+            <span className="text-ink-soft mt-0.5 text-[0.8125rem] font-medium tracking-tight">
+              Attendance
+            </span>
+          </span>
         </Link>
       </header>
 

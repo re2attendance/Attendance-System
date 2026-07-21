@@ -2,11 +2,12 @@ import Link from "next/link";
 
 import { OrDivider } from "@/components/ui/divider";
 import { GoogleButton } from "@/components/ui/google-button";
+import { PageHeading } from "@/components/ui/page-heading";
 import { createClient } from "@/lib/supabase/server";
 import type { ClassOption } from "@/components/ui/class-select";
 import { SignUpForm } from "./sign-up-form";
 
-export const metadata = { title: "Create an account · Attendance" };
+export const metadata = { title: "Create an account · UPSA Attendance" };
 
 export default async function SignUpPage() {
   const supabase = await createClient();
@@ -23,12 +24,9 @@ export default async function SignUpPage() {
 
   return (
     <>
-      <div className="mb-8">
-        <h1 className="text-ink text-[2rem] leading-[1.15] font-bold tracking-[-0.02em]">
-          Create your account
-        </h1>
-        <p className="text-ink-soft mt-2 text-[0.9375rem]">Use the details on your student ID.</p>
-      </div>
+      <PageHeading title="Create your account" emoji="🎒">
+        Use the details on your student ID.
+      </PageHeading>
 
       {classes.length === 0 ? (
         // Not an error the student caused, and not something they can fix — so it says

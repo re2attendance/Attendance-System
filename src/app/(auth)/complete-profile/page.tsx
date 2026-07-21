@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { ClassOption } from "@/components/ui/class-select";
 import { CompleteProfileForm } from "./complete-profile-form";
 
-export const metadata = { title: "One last thing · Attendance" };
+export const metadata = { title: "One last thing · UPSA Attendance" };
 
 /**
  * The step Google leaves behind. It can prove the address and hand us a name; it has no

@@ -5,7 +5,7 @@ import { signOut } from "@/lib/auth/actions";
 import { readTheme } from "@/lib/theme-server";
 import { createClient } from "@/lib/supabase/server";
 
-export const metadata = { title: "Dashboard · Attendance" };
+export const metadata = { title: "Dashboard · UPSA Attendance" };
 
 /**
  * Deliberately empty. Phase 1's definition of done is that a student can sign up and
