@@ -48,3 +48,32 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
           NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN: ${{ vars.NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN }}
           NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
+
+  # The security boundary is in the database, so it is tested in a database. This
+  # job stands up the real local stack, applies every migration from scratch, and
+  # runs the pgTAP suite as the `authenticated` role — the same role a browser
+  # holding the publishable key gets.
+  database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Start Supabase
+        run: pnpm db:start
+
+      - name: Apply migrations from scratch
+        run: pnpm db:reset
+
+      - name: Database tests
+        run: pnpm db:test
