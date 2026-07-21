@@ -18,7 +18,12 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
+  // Matches --color-surface in each theme, so the browser chrome does not sit as a
+  // white band above a dark page.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b101d" },
+  ],
   width: "device-width",
   initialScale: 1,
   // Zoom is left enabled. Disabling it is the usual reflex for an app-like feel, and it
