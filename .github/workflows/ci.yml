@@ -49,6 +49,27 @@ jobs:
           NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN: ${{ vars.NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN }}
           NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
 
+  # Supabase Branching applies migrations to the production database the moment they
+  # land on `main`, so the pull request is the only place to intercept anything (D-059).
+  # Cheap and dependency-free on purpose: it needs an answer in seconds, long before the
+  # database job has finished starting Postgres.
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The guard diffs against the merge base, which a shallow clone does not have.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      # Called directly rather than through pnpm: the script uses only node builtins,
+      # so this job needs no install step at all.
+      - name: Migration guard
+        run: node scripts/check-migrations.mjs
+
   # The security boundary is in the database, so it is tested in a database. This
   # job stands up the real local stack, applies every migration from scratch, and
   # runs the pgTAP suite as the `authenticated` role — the same role a browser
