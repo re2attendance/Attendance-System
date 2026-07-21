@@ -347,3 +347,56 @@ shredded immediately after, and the owner was told to revoke it.
 
 **For next time:** credentials should not enter the conversation. Prefer an interactive
 CLI login, or a file written outside the repo and referenced by path.
+
+---
+
+## 2026-07-21 — Phase 1 backend, part 1 of 2
+
+### D-045 — Role lookups use SECURITY DEFINER helpers, not a JWT hook ✅ DECIDED
+
+Reverses the Phase 0 intent (custom access token hook). Both solve the recursion
+problem — a policy on `profiles` that queries `role_assignments`, whose own policy
+queries `profiles`, errors with infinite recursion — but the hook lives in dashboard
+configuration the repo cannot version, and the security boundary belongs entirely in
+migrations. Cost is a function call per policy evaluation, irrelevant at this scale.
+
+All helpers are `stable security definer set search_path = ''`, and wrap
+`(select auth.uid())` so Postgres evaluates it once per statement, not once per row.
+
+### D-046 — Privileges are declared in migrations, not inherited ✅ DECIDED
+
+Supabase carries two conflicting default-privilege sets for schema `public`:
+`supabase_admin` grants full DML to anon/authenticated/service_role, `postgres` grants
+only `Dxtm`. Migrations run as `postgres`, so which applies depends on platform
+version — and it **genuinely differed between this project's local stack and its
+hosted database**. Identical migrations were producing different security in the two
+environments: local denied at the grant layer, hosted at the policy layer.
+
+Worse, the default grants **TRUNCATE, which is not subject to RLS** — a role holding
+it can empty a table no policy would let it read. `anon` held TRUNCATE on
+`attendance_records` on the hosted project. Not reachable through PostgREST, but not a
+privilege an unauthenticated role should hold on an attendance ledger.
+
+0012 now revokes everything from `anon`, revokes TRUNCATE from everyone, and grants
+back deliberately. Both databases verified identical afterwards.
+
+### D-047 — Admin reads students through a names-only view ✅ DECIDED
+
+Build plan §6 requires the admin see names but not index numbers or emails. RLS filters
+rows; this is a column requirement. So the admin has **no row access to `profiles` at
+all**, and `admin_student_directory` is the only path — a view that simply does not
+select the hidden columns, so no query can yield them.
+
+### D-048 — Flags are hidden from the student they concern ✅ DECIDED
+
+`attendance_flags` is readable by reps and watchers only. Telling a student their
+submission was flagged for a shared device teaches them precisely how to evade the
+check next week.
+
+### D-049 — 0012 amended after being applied ℹ️ NOTED
+
+Migrations should be immutable once applied. `0012` was amended the same day to strip
+default privileges the view re-acquired (it is created after the blanket revokes run).
+Acceptable here because both environments are under direct control and were verified
+identical afterwards; the delta was applied to hosted explicitly. Not a habit to repeat
+once there are environments we do not control.

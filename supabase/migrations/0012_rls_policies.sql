@@ -270,7 +270,9 @@ with (security_invoker = false) as
     join public.classes c on c.id = p.class_id
    where public.is_admin();
 
-revoke all on public.admin_student_directory from anon, public;
+-- The blanket revokes at the top of this file ran before this view existed, so it
+-- picked default privileges back up. Strip them and grant only what it needs.
+revoke all on public.admin_student_directory from anon, public, authenticated;
 grant select on public.admin_student_directory to authenticated;
 
 comment on view public.admin_student_directory is
