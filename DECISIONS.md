@@ -465,3 +465,50 @@ Three ways to close it, in ascending cost:
 **Recommendation: (1).** It fits the existing model, needs no scheduler on the free tier,
 and keeps `auto_opened` as the countable signal that a rep is not doing the job. Not
 implemented pending a decision.
+
+### D-054 — The auto-open fallback fires on submission (closes D-053) ✅ DONE
+
+Chosen over a `pg_cron` job and over deleting the feature. `0015` replaces
+`submit_attendance` so that, where it used to turn the student away, it opens a window
+itself and records that it did.
+
+**Why not cron:** it buys nothing for integrity — nobody is in the room either way —
+while adding the only always-on background process in the system, one that fails
+silently. Paying an operational cost for zero trustworthiness gain is a bad trade.
+
+**Why not delete it:** it punishes a whole cohort for one person's lapse, and leaves
+them no recourse at all — no record means no dispute, because `raise_dispute` needs a
+record to point at.
+
+**Why not the retroactive admin door:** it is weaker exactly where it counts. Opening
+the window the next day makes the location check meaningless — students submit from
+home and the record rests on the rep's memory of a room from a week ago. That is the
+paper sheet with extra steps. Kept in reserve if forgotten-entirely sessions turn out
+to happen in practice.
+
+What the fallback keeps is the lock that actually stops the fraud: the student must be
+inside the campus geofence **during the lecture's own time window**. Signing in for an
+absent friend still requires that friend to be on campus while the lecture runs. What
+it gives up is the rep watching submissions arrive live — so every such check-in is
+flagged `auto_opened_window`, and the rep still decides every record afterwards.
+
+Three restrictions make it narrow:
+
+- **Only when no window has ever existed** for that session. If the rep opened one and
+  it closed, they are present and engaged, and the top-up windows for latecomers are
+  theirs. Without this a student could wait out the first window and quietly open the
+  next one.
+- **Clamped to the lecture.** `closes_at` is `least(now() + first_window, ends_at)`. A
+  window still open after the session ends is a window for submitting from elsewhere.
+- **Never after the lecture ends**, and never before `auto_open_after_minutes` has
+  elapsed — the rep keeps first refusal.
+
+Race-safe: two simultaneous first submissions resolve through `on conflict do nothing`
+plus a re-select, the same pattern `attendance_records` already uses.
+
+### D-055 — Attendance rates must count held sessions only ⛔ OPEN — Phase 6
+
+Banked while deciding D-054. A session whose attendance never opened stays `scheduled`
+rather than `held`, so it is already distinguishable in the data. When the analytics
+land, the denominator must be **sessions that actually opened attendance** — otherwise
+a lecture nobody could record counts as an absence against every student in the class.
