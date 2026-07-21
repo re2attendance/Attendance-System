@@ -918,3 +918,34 @@ Sign-in answers "that index number and password do not match" whether the accoun
 missing or the password is wrong, and the password-reset form says the same thing either
 way. Distinguishing them turns a login form into a lookup tool for which index numbers are
 registered — a roster of who attends this university, one guess at a time.
+
+### D-073 — Dark mode built now, not deferred to polish ✅ DECIDED (by RM)
+
+Chosen over waiting for Phase 7. The tokens are CSS variables already, so the plumbing is
+cheap today and gets expensive once dozens of components have hardcoded a colour. The cost
+is real and accepted: every screen from here needs reviewing in both themes.
+
+It is not an inversion. Pure black is avoided for the same reason pure white is, surfaces
+separate by lightness rather than by hairlines (which turn to mud on a dark ground), and
+the blue _lightens_ — `#2b4ce0` against near-black fails contrast for the text sitting on
+it, and a primary button nobody can read is not a primary button.
+
+Two things had to change to make it possible, both of which would have silently produced a
+half-dark interface:
+
+- **`bg-white` became `bg-surface`/`bg-raised`, and `text-white` became `text-on-brand`.**
+  A literal white does not respond to a theme. `on-brand` exists because the text sitting
+  on the blue flips to near-black in dark mode, where the lightened blue makes white
+  unreadable.
+- **The select's chevron became a real `<svg>`** instead of a background `data:` URI. A
+  data-URI has to hardcode its stroke colour, so it would have stayed near-black on a dark
+  field.
+
+**The trap worth recording:** Tailwind v4 hoists every `@theme` block into a single root
+declaration _regardless of the at-rule wrapping it_. A `@theme` nested inside
+`@media (prefers-color-scheme: dark)` does not scope anything — it overwrites the light
+theme outright, and dark mode is simply always on, in both themes, with no error. The
+correct form is a plain `:root` override inside the media query.
+
+Nothing catches this except reading the compiled CSS, which is how it was caught: the
+built stylesheet had the dark values sitting in the light `:root`.

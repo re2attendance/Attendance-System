@@ -68,7 +68,7 @@ export function Input({ invalid, className, ...props }: InputProps) {
       className={cn(
         "bg-sunken text-ink h-13 w-full rounded-xl border px-4 transition",
         "placeholder:text-ink-faint",
-        "focus:bg-white focus:ring-4 focus:outline-none",
+        "focus:bg-raised focus:ring-4 focus:outline-none",
         invalid
           ? "border-danger bg-danger-soft focus:ring-danger/15"
           : "focus:border-brand-500 focus:ring-brand-500/15 border-transparent",

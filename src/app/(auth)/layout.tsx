@@ -39,12 +39,12 @@ export default function AuthLayout({ children }: Readonly<{ children: React.Reac
  */
 function Mark() {
   return (
-    <span className="bg-brand-600 grid size-9 place-items-center rounded-[0.625rem]">
+    <span className="bg-brand-600 text-on-brand grid size-9 place-items-center rounded-[0.625rem]">
       <svg
         className="size-5"
         viewBox="0 0 20 20"
         fill="none"
-        stroke="white"
+        stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"

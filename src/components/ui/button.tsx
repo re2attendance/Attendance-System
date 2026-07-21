@@ -16,8 +16,8 @@ const base =
   "disabled:pointer-events-none disabled:opacity-55";
 
 const variants = {
-  primary: "bg-brand-600 text-white hover:bg-brand-700",
-  secondary: "border border-line bg-white text-ink hover:bg-sunken hover:border-ink-faint/40",
+  primary: "bg-brand-600 text-on-brand hover:bg-brand-700",
+  secondary: "border-line bg-raised text-ink hover:bg-sunken hover:border-ink-faint/40 border",
 } as const;
 
 export function Button({

@@ -8,18 +8,22 @@
  * The palette is deliberately narrow: one blue, one near-black, two greys and one red.
  * An attendance app is read in a hurry, in a lecture hall, on a phone held at arm's
  * length. Every extra colour is one more thing to decode, and the signal that has to
- * survive that reading is whether attendance was recorded or not.
+ * survive that reading is whether attendance was recorded.
+ *
+ * Every colour here is *semantic* — `surface`, `sunken`, `ink` — rather than a shade
+ * name. That is what lets the dark theme below be a list of new values instead of a
+ * second set of components (D-073).
  */
 @theme {
-  /* The blue carries every primary action. Deeper than the reference's, because the
-   * reference sits inside a small card and this layout is full-bleed: the same hue over
-   * more area reads lighter than it measures. */
+  /* The blue carries every primary action. */
   --color-brand-50: #eef2ff;
   --color-brand-100: #dfe6ff;
-  --color-brand-200: #c3d0ff;
   --color-brand-500: #3d63f5;
   --color-brand-600: #2b4ce0;
   --color-brand-700: #2340bd;
+  /* Text that sits on the brand colour. Not `white` literally: on the dark theme the
+   * blue lightens, and near-black on it reads better than white. */
+  --color-on-brand: #ffffff;
 
   /* Text. `ink` is not pure black — #000 on #fff vibrates on the OLED phones this will
    * mostly run on. */
@@ -28,7 +32,10 @@
   --color-ink-faint: #8b93a5;
 
   /* Surfaces. `sunken` is the resting fill of an input: a filled field reads as a larger
-   * tap target than an outlined one of the same size. */
+   * tap target than an outlined one of the same size. `raised` is what it becomes on
+   * focus, and the fill of a secondary button. */
+  --color-surface: #ffffff;
+  --color-raised: #ffffff;
   --color-line: #e4e7ef;
   --color-sunken: #f4f6fa;
 
@@ -38,13 +45,61 @@
   --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
+/* The dark theme.
+ *
+ * Not an inversion. Pure black is avoided for the same reason pure white is — and the
+ * surfaces separate by lightness rather than by borders, because hairlines that read
+ * cleanly on white turn to mud on a dark ground.
+ *
+ * The blue lightens: #2b4ce0 on near-black fails contrast for the text sitting on it,
+ * and a primary button nobody can read is not a primary button.
+ */
+/* The dark theme.
+ *
+ * A plain `:root` override, not a second `@theme` block. Tailwind v4 hoists every
+ * `@theme` into one root declaration regardless of the at-rule wrapping it, so nesting
+ * one inside a media query does not scope it — it silently overwrites the light theme
+ * and dark mode is simply always on. Caught by reading the compiled CSS (D-073).
+ *
+ * Not an inversion. Pure black is avoided for the same reason pure white is, and the
+ * surfaces separate by lightness rather than by borders, because hairlines that read
+ * cleanly on white turn to mud on a dark ground.
+ *
+ * The blue lightens: #2b4ce0 against near-black fails contrast for the text sitting on
+ * it, and a primary button nobody can read is not a primary button.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-brand-50: #171f38;
+    --color-brand-100: #1e2a4d;
+    --color-brand-500: #7d97ff;
+    --color-brand-600: #6b87ff;
+    --color-brand-700: #8aa2ff;
+    --color-on-brand: #0b101d;
+
+    --color-ink: #eef1f7;
+    --color-ink-soft: #a2acc0;
+    --color-ink-faint: #737e94;
+
+    --color-surface: #0b101d;
+    --color-raised: #161d2e;
+    --color-line: #263048;
+    --color-sunken: #141b2b;
+
+    --color-danger: #ff8189;
+    --color-danger-soft: #2a1519;
+  }
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+    /* Tells the browser to render form controls, scrollbars and the like to match. */
+    color-scheme: light dark;
   }
 
   body {
-    background: white;
+    background: var(--color-surface);
     color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-tap-highlight-color: transparent;
