@@ -240,3 +240,58 @@ security patches, and it is what the local machine and CI are both on.
 Recommendation: align everything on **Node 22 LTS** — update `engines`, the CI
 `node-version`, and the Vercel project setting, and upgrade the local runtime via nvm.
 Not done yet: it changes the local toolchain, so it needs approval first.
+
+---
+
+## 2026-07-21 — Schema approved, security closed
+
+### D-036 — Node 22 LTS across every environment ✅ DONE (closes D-035)
+
+Local 22.23.1 via nvm, CI pinned to 22, `.nvmrc` added, and `engines: "22.x"` — which
+Vercel reads to pin its build image, so the version lives in the repo rather than in
+dashboard state nobody can see. Typecheck and build pass on the new runtime.
+
+### D-037 — RLS enabled on all 19 tables ✅ DONE
+
+Migration `0010_enable_rls.sql`, applied to local and hosted.
+
+The order was wrong originally: `0001`–`0009` created tables with RLS off, and the
+publishable key is inlined into the public client bundle, so for a window anyone could
+read or write every row. Nothing was exposed in practice (no rows, no users), but the
+lesson stands — **lock first, open deliberately**. RLS with no policies denies
+everything, which is the correct resting state, and RLS does not restrict
+`SECURITY DEFINER` functions, which is how the write path is designed anyway.
+
+Supabase's critical `rls_disabled` advisory is cleared; only the expected INFO-level
+`rls_enabled_no_policy` remains until the policy migration lands.
+
+### D-038 — Schema approved ✅ DECIDED
+
+Owner approved the model 2026-07-21. Hosted verified identical to local: 19 tables,
+56 check constraints, 4 exclusion constraints, 38 indexes.
+
+Three open judgement calls confirmed as built:
+
+- **`day_of_week` is ISO-8601**, Monday = 1 … Sunday = 7, matching Postgres `isodow`
+  so session generation needs no conversion.
+- **"Minimum 1 rep per class" stays out of the database** — a DB minimum would make
+  class creation impossible, since the class must exist before anyone can be appointed
+  to it. The admin dashboard warns on classes with zero reps instead.
+- **`disputes.semester_id` is stored, not derived** — so the per-semester count is a
+  single lookup and cannot change retroactively if a session's date is later edited.
+
+### D-039 — Service-role key rotation ⛔ OPEN — owner action only
+
+The Supabase MCP can read keys but cannot reset them, so this cannot be automated from
+here. Dashboard → Settings → API → `service_role` → reset.
+
+Needed because that key **bypasses RLS entirely** — D-037 does not protect against it.
+It was deployed in a public build for the abandoned v1 project, so treat it as
+compromised. Nothing in the current codebase uses it; rotating breaks nothing.
+
+### D-040 — Migrations reached the hosted project outside this session ℹ️ NOTED
+
+`0001`–`0009` were found already applied, with matching version numbers and file names,
+before this session pushed them. Consistent with `supabase db push` having been run by
+the owner. Recorded because for a system whose premise is a trustworthy audit trail,
+"who can change the database" is itself worth writing down.
