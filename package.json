@@ -23,7 +23,8 @@
     "db:push": "supabase db push",
     "db:diff": "supabase db diff",
     "db:types": "supabase gen types typescript --linked > src/lib/database.types.ts",
-    "db:test": "supabase test db"
+    "db:test": "supabase test db",
+    "check:migrations": "node scripts/check-migrations.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.0",

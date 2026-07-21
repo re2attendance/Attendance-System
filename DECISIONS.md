@@ -685,4 +685,72 @@ database fix. Worth adding the moment Phase 1 starts.
 
 Question 2 of D-059 — whether a destructive migration should reach production with no
 human in the loop — is still open. A required check proves a migration _passes its
-tests_; it does not prove a `drop column` was intended.
+tests_; it does not prove a `drop column` was intended. Closed by D-061.
+
+### D-061 — Destructive migrations are allowed, but must say so ✅ DONE (decision delegated to me)
+
+Closes the second half of D-059. A new required check, `guard`
+(`scripts/check-migrations.mjs`), refuses a pull request that either edits an
+already-merged migration or adds one that destroys data without an explanatory
+`-- DESTRUCTIVE: <reason>` line.
+
+**Where the interception has to happen.** Supabase Branching watches the repository
+directly; it is not a GitHub Action, so a deployment-environment approval cannot sit in
+front of it and there is no post-merge gate to add. The pull request is the only place
+anything can be stopped. That constraint, more than anything, shaped the answer.
+
+**Why not simply block destructive migrations.** Because they are sometimes correct, and
+a rule that says "never" gets switched off the first afternoon it is wrong. `0016` itself
+deletes rows — the cancellation trigger voids attendance for a session that no longer
+happened — and that was the right call, argued at length in D-057.
+
+**Why not turn Branching off and push migrations by hand.** This was the tempting answer
+and it is worse. It replaces an automated step that always runs with a manual step that
+will eventually be forgotten, and a forgotten `db push` leaves the repo and the database
+silently disagreeing — which is harder to notice, and harder to unpick, than a bad
+migration that at least announces itself. Automation that always happens beats ceremony
+that usually happens.
+
+**So: permitted, but stamped.** The same move the schema already makes in three places —
+`auto_opened` on a window, `self_approved_watcher_timeout` on a record, `no_submission`
+on an absence. Each is allowed and each leaves a mark, so the thing that matters is
+countable rather than merely possible. A destructive migration now leaves its mark in the
+migration itself, where the reason survives next to the SQL instead of in a pull-request
+comment nobody reads twice.
+
+**What it does not flag, deliberately:** dropping a function, trigger, policy, index or
+constraint. That is how this schema is edited — `0016` drops and recreates two check
+constraints and replaces `effective_settings` — and none of it loses data. Flagging them
+would train everyone to add the marker by reflex, which is precisely the failure this
+check exists to avoid. It also ignores `revoke truncate`/`grant`, which hand privileges
+around rather than deleting anything, and strips comments before matching, because `0012`
+discusses TRUNCATE in prose for three lines.
+
+**The immutability half is the one that will fire most often.** Editing a merged
+migration is the easier mistake and the quieter one: Branching has already applied it and
+will not apply it again, so the edit changes the repo and not the database, and the two
+disagree from then on with nothing to indicate it.
+
+### D-062 — There is no backup, and that is now the largest single risk ⛔ OPEN — owner action
+
+Raised while deciding D-061, because a guard is only half an answer: it lowers the
+chance of destroying data and does nothing about the consequence.
+
+The Supabase **free tier has no point-in-time recovery and no daily backups**. Today that
+costs nothing — the database holds no real data, and every table can be rebuilt from
+`supabase/migrations/`. The moment the first cohort signs in, attendance records become
+the one thing in this system that cannot be regenerated from anything. A dropped table
+would be unrecoverable, guard or no guard.
+
+Two ways to close it, and they are not exclusive:
+
+1. **Supabase Pro** (~$25/mo) for daily backups and 7-day PITR. The honest option, and
+   the only one that recovers from "the table is gone" rather than "the table is stale".
+2. **A scheduled `pg_dump`** from a GitHub Action to a private artifact or release. Free,
+   but it needs database credentials in repository secrets — which this project has so
+   far deliberately avoided (D-004: no service-role key anywhere) — and it recovers only
+   to the last nightly run.
+
+**Recommendation: (1), before the first real student account exists**, not before. Paying
+for backups of an empty database is waste; discovering the gap after a cohort has been
+using it for a term is unrecoverable. This is a spending decision, so it is the owner's.
