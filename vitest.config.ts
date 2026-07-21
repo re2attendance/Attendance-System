@@ -19,6 +19,7 @@ export default defineConfig({
       NEXT_PUBLIC_SUPABASE_URL: "https://test.supabase.co",
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
       NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN: "upsamail.edu.gh",
+      NEXT_PUBLIC_SITE_URL: "http://localhost:3000",
     },
   },
 });

@@ -832,3 +832,89 @@ class list of D-065 will use hand-picked ids too.
 Validation stricter than the database is the exact failure this shared-schema layer
 exists to prevent: a signup form refusing a class that genuinely exists, with an error
 message about nothing the student can see or fix.
+
+---
+
+## 2026-07-21 — Phase 1 UI, against the owner's reference
+
+The reference supplied was three states of one login screen (empty, filled, focused):
+centred white card on grey, blue primary, Google button, email + password, "Remember me".
+The owner's instruction was that it is generic, that it must not be copied, and that the
+result must not feel borrowed. What follows is what was taken, what was rejected, and why.
+
+### D-068 — Blue, not the yellow in §10 ✅ DECIDED (by RM)
+
+Build plan §10 locked "minimalist, yellow + white". The reference is blue, and the owner
+chose the reference. §10 has been amended rather than left to contradict the code.
+
+Recorded because it was a genuine conflict rather than an oversight, and because the
+argument against went the other way: near every auth screen in circulation is this blue,
+so it is the palette most likely to read as borrowed. It is now one blue, one near-black,
+two greys and one red — narrow on purpose, because the single signal that has to survive
+being read at arm's length in a lecture hall is whether attendance was recorded.
+
+### D-069 — The index number is the identity; the email is derived ✅ DECIDED (by RM)
+
+The strongest thing in this build, and it comes from a constraint rather than a
+screenshot. 0004 requires `split_part(email,'@',1) = index_number`. The obvious build asks
+for both and rejects the mismatch. Instead the student types their index number and
+watches the university address assemble beneath it, read-only.
+
+One fewer field, and an entire error class deleted rather than handled — the mismatch has
+nowhere left to happen. It also means the signup form has no email input at all, which is
+asserted in `identity.test.ts` so a future edit cannot quietly reintroduce one.
+
+The same idea carries into sign-in, which takes **one** identifier field: seven digits
+from a student, an address from the admin, who has no index number and no profile. Two
+labelled fields would leave one of them dead weight for everybody.
+
+### D-070 — Full-bleed and left-aligned, with hand-built components ✅ DECIDED (by RM)
+
+The card is gone. A white panel floating on grey is the layout of every auth template
+there is; edge-to-edge content on a left-aligned column reads as an application, and gives
+the five-field signup room without scrolling on a small phone.
+
+**A deviation to flag:** the locked stack (§3) names shadcn/ui, and these screens do not
+use it. Everything Phase 1 needs is a label, an input, a button and a select — native
+elements that are already accessible, where shadcn would add Radix and a generated
+component set whose default look is exactly the borrowed quality being avoided. It has not
+been ruled out: the moment Phase 2 needs a dialog, a popover or a combobox, the argument
+reverses and hand-rolling those would be a mistake. Raised here rather than done silently.
+
+Details that are deliberate rather than incidental:
+
+- `min-h-dvh`, not `min-h-screen` — on mobile Safari `100vh` exceeds the visible area, so
+  the submit button hides under browser chrome exactly when the keyboard is open.
+- Inputs are 16px minimum — below that iOS zooms on focus and does not zoom back.
+- `inputMode="numeric"`, not `type="number"` — the latter drops a leading zero from an
+  identifier and adds a scroll wheel that can change it silently.
+- 52px controls, not the 44px minimum: pressed with a thumb, often while walking.
+- Plus Jakarta Sans over Inter or Geist, which are the defaults of every starter.
+
+### D-071 — Google is restricted to the university domain, and re-checked server-side ✅ DECIDED (by RM)
+
+upsamail.edu.gh runs on Google Workspace, so Google returning the address _is_ proof the
+student owns it — stronger than a confirmation link, which only proves someone opened the
+inbox once.
+
+The `hd` parameter narrows Google's account chooser. **It is a convenience, not a
+control**: it lives in a URL the browser can edit, so `/auth/callback` checks the returned
+address against the domain again before trusting it, and signs the user out if it fails.
+Without that second check, any personal Gmail account would be a way in.
+
+Email + password is kept alongside it, per the owner, for anyone Google fails — so D-064's
+SMTP provider is still required. Google alone would have removed it.
+
+Two things the reference has that were dropped:
+
+- **"Remember me"** — Supabase persists sessions by default and exposes no short-session
+  option, so the checkbox would have controlled nothing. A control that does nothing is
+  worse than none.
+- **The back chevron** on the login screen, which had nowhere to go.
+
+### D-072 — Failure messages never reveal whether an account exists ✅ DECIDED
+
+Sign-in answers "that index number and password do not match" whether the account is
+missing or the password is wrong, and the password-reset form says the same thing either
+way. Distinguishing them turns a login form into a lookup tool for which index numbers are
+registered — a roster of who attends this university, one guess at a time.

@@ -1,15 +1,14 @@
-// These schemas mirror constraints in migration 0004. The tests below are written from
-// the constraints, not from the schema code, so that a schema edited out of step with the
-// database fails here rather than at a Postgres error the student has to read.
+// These schemas mirror constraints in migration 0004. The tests are written from the
+// constraints rather than from the schema code, so a schema edited out of step with the
+// database fails here instead of at a Postgres error the student has to read.
 
 import { describe, expect, it } from "vitest";
 
-import { signIn, signUp } from "./identity";
+import { emailForIdentifier, emailForIndex, signIn, signUp } from "./identity";
 
 const valid = {
   fullName: "Ama Mensah",
   indexNumber: "1000004",
-  email: "1000004@upsamail.edu.gh",
   password: "correct horse battery",
   classId: "00000000-0000-0000-0000-0000000000e1",
 };
@@ -17,16 +16,6 @@ const valid = {
 describe("signUp", () => {
   it("accepts a well-formed registration", () => {
     expect(signUp.safeParse(valid).success).toBe(true);
-  });
-
-  // profiles_email_matches_index — the rule that stops someone registering under a
-  // classmate's index while typing their own into the form.
-  it("rejects an email whose prefix is not the index number", () => {
-    const result = signUp.safeParse({ ...valid, email: "1000005@upsamail.edu.gh" });
-    expect(result.success).toBe(false);
-    // Reported against `email`, not the form as a whole, so the message lands under the
-    // field the student has to change.
-    expect(result.error?.issues[0]?.path).toEqual(["email"]);
   });
 
   // profiles_index_is_7_digits
@@ -37,10 +26,6 @@ describe("signUp", () => {
     },
   );
 
-  it("rejects an email from outside the university domain", () => {
-    expect(signUp.safeParse({ ...valid, email: "1000004@gmail.com" }).success).toBe(false);
-  });
-
   it("rejects a password under 8 characters", () => {
     expect(signUp.safeParse({ ...valid, password: "short12" }).success).toBe(false);
   });
@@ -50,43 +35,74 @@ describe("signUp", () => {
     expect(signUp.safeParse({ ...valid, classId: "class-a" }).success).toBe(false);
   });
 
-  // Regression: z.uuid() enforces RFC version/variant bits that Postgres does not, so it
-  // rejects ids the database accepts — including every id in the pgTAP fixtures and any
-  // hand-picked one in the seeded class list. `valid.classId` above is such an id, so
-  // this is really asserted by every other test in this block; it is spelled out here
-  // because the failure mode is a form that refuses a class that genuinely exists.
+  // Regression: z.uuid() enforces RFC 9562 version/variant bits that Postgres does not,
+  // so it refuses ids the database accepts — every id in the pgTAP fixtures, and the
+  // hand-picked ones the seeded class list will use. The failure mode is a form that
+  // rejects a class which genuinely exists.
   it("accepts a class id that Postgres accepts but RFC 9562 does not", () => {
-    const notRfcVersioned = "00000000-0000-0000-0000-0000000000e1";
-    expect(signUp.safeParse({ ...valid, classId: notRfcVersioned }).success).toBe(true);
-  });
-
-  // The address is lowercased before it is compared, because profiles.email is citext:
-  // the database would consider these the same address, so the prefix check must too.
-  it("normalises case so the index check matches what the database will store", () => {
-    const result = signUp.safeParse({
-      ...valid,
-      email: "1000004@UPSAMAIL.EDU.GH",
-    });
-    expect(result.success).toBe(true);
-    expect(result.data?.email).toBe("1000004@upsamail.edu.gh");
+    expect(
+      signUp.safeParse({
+        ...valid,
+        classId: "00000000-0000-0000-0000-0000000000e1",
+      }).success,
+    ).toBe(true);
   });
 
   it("trims a name padded with spaces, and rejects one that is only spaces", () => {
     expect(signUp.safeParse({ ...valid, fullName: "  Ama  " }).data?.fullName).toBe("Ama");
     expect(signUp.safeParse({ ...valid, fullName: "   " }).success).toBe(false);
   });
+
+  // The design decision, asserted: there is no email to get wrong (D-069).
+  it("takes no email at all — the address is derived, so it cannot mismatch", () => {
+    expect("email" in signUp.shape).toBe(false);
+  });
+});
+
+describe("emailForIndex", () => {
+  it("builds the address 0004 expects", () => {
+    expect(emailForIndex("1000004")).toBe("1000004@upsamail.edu.gh");
+  });
+
+  // profiles.email is citext, so the database treats these as one address. Anything we
+  // derive has to agree with that or the uniqueness check happens on the wrong string.
+  it("is lowercase, matching the citext column", () => {
+    expect(emailForIndex("1000004")).toBe(emailForIndex("1000004").toLowerCase());
+  });
 });
 
 describe("signIn", () => {
+  it("accepts a 7-digit index number", () => {
+    expect(signIn.safeParse({ identifier: "1000004", password: "x" }).success).toBe(true);
+  });
+
+  // The admin has no index number and no profile (0004), so the same field has to take
+  // an address, and that address is not on the university domain.
+  it("accepts an email address, including one off the university domain", () => {
+    expect(signIn.safeParse({ identifier: "admin@example.org", password: "x" }).success).toBe(true);
+  });
+
+  it.each(["123456", "not-an-email", ""])("rejects the identifier %j", (identifier) => {
+    expect(signIn.safeParse({ identifier, password: "x" }).success).toBe(false);
+  });
+
   it("accepts any non-empty password", () => {
     // An account may predate a password-rule change; the login form is the wrong place
     // to tell someone their existing password is too short.
-    expect(signIn.safeParse({ email: valid.email, password: "old" }).success).toBe(true);
+    expect(signIn.safeParse({ identifier: "1000004", password: "old" }).success).toBe(true);
   });
 
-  it("still requires a university address", () => {
-    expect(signIn.safeParse({ email: "someone@gmail.com", password: "whatever" }).success).toBe(
-      false,
-    );
+  it("requires a password", () => {
+    expect(signIn.safeParse({ identifier: "1000004", password: "" }).success).toBe(false);
+  });
+});
+
+describe("emailForIdentifier", () => {
+  it("expands an index number into its university address", () => {
+    expect(emailForIdentifier("1000004")).toBe("1000004@upsamail.edu.gh");
+  });
+
+  it("passes an address through untouched but lowercased", () => {
+    expect(emailForIdentifier("  Admin@Example.org ")).toBe("admin@example.org");
   });
 });

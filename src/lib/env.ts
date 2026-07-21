@@ -24,6 +24,11 @@ const publicEnv = z.object({
   NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN: z.string().regex(/^[a-z0-9.-]+\.[a-z]{2,}$/, {
     error: "must be a bare domain, e.g. upsamail.edu.gh — no scheme, no @",
   }),
+  // Where password-reset and confirmation links point. Must be absolute: the link is
+  // opened from a mail client, which has no idea what host sent it.
+  NEXT_PUBLIC_SITE_URL: z.url({
+    error: "must be the absolute site URL, e.g. https://attendance.example.com",
+  }),
 });
 
 // Referenced by their full names rather than destructured from process.env, because
@@ -33,6 +38,7 @@ const parsed = publicEnv.safeParse({
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
   NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN: process.env.NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN,
+  NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
 });
 
 if (!parsed.success) {
