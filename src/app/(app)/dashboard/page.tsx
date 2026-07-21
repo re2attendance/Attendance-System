@@ -16,8 +16,9 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   const theme = await readTheme();
 
-  // getUser(), not getSession(): getSession() believes the cookie, getUser() asks the
-  // Auth server whether the token is real. This is the gate on the whole signed-in area.
+  // (app)/layout.tsx already gated this group, so reaching here without a session should
+  // be impossible. Kept anyway: it costs a line, it makes the page safe to read on its own
+  // terms, and it is what tells the type checker `user` is not null.
   const {
     data: { user },
   } = await supabase.auth.getUser();
