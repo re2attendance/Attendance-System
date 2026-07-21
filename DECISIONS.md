@@ -754,3 +754,81 @@ Two ways to close it, and they are not exclusive:
 **Recommendation: (1), before the first real student account exists**, not before. Paying
 for backups of an empty database is waste; discovering the gap after a cohort has been
 using it for a term is unrecoverable. This is a spending decision, so it is the owner's.
+
+---
+
+## 2026-07-21 — Phase 1 opened
+
+### D-063 — The first admin is created by hand, then granted by migration ✅ DECIDED (by RM)
+
+Signup cannot produce an admin: `profiles` requires an index number and a class, and an
+admin deliberately has neither (0004). So the owner creates the auth user once in
+Supabase Dashboard → Authentication → Add user, and a migration grants the role by
+matching that email — raising if it matches nothing, so it cannot silently no-op and
+leave a system with no administrator.
+
+Rejected: a `bootstrap_admin()` RPC that grants admin to the first caller and then
+self-disables. It removes the manual step but opens a window between deploy and that
+first call in which anyone who can sign up could claim the system. On a public URL that
+window is real. Also rejected: seeding `auth.users` directly from a migration — it puts a
+credential in git and hand-writing those rows bypasses Supabase Auth's own invariants.
+
+**Blocked on the owner:** the admin's email address.
+
+### D-064 — Signup requires email confirmation, over custom SMTP ✅ DECIDED (by RM)
+
+This is an integrity decision, not a UX one. The email is otherwise just a typed string:
+without confirmation, the first person to register `1000004@upsamail.edu.gh` owns that
+student's attendance identity permanently, and the real 1000004 is locked out by the
+uniqueness constraint on `profiles.email`. For a system whose entire purpose is a
+trustworthy attendance record, an unverified identity is the wrong foundation.
+
+Supabase's built-in email service sends roughly 2–4 messages an hour, which is unusable
+for a cohort, so this requires a custom SMTP provider. Free tiers that fit: Resend
+(3,000/month) or Brevo (300/day).
+
+This does not reopen D-023 (in-app notifications only, no email provider). That decision
+was about _notifications_; authentication mail is a different thing and Supabase Auth
+sends it directly.
+
+**Blocked on the owner:** an SMTP account and its credentials, plus the Supabase Auth
+Site URL and redirect allowlist, which the deployment notes record as never having been
+set — password-reset and confirmation links will not point anywhere useful until they are.
+
+### D-065 — The real class list is seeded now ✅ DECIDED (by RM)
+
+`profiles.class_id` is `not null`, so no student can sign up until at least one class
+exists — but class management is Phase 2. Rather than reorder the phases or weaken the
+constraint, the real class list is seeded in a migration now, and Phase 2's admin CRUD
+manages that same list when it arrives.
+
+Rejected: making `class_id` nullable so signup can defer it. `my_class_id()` drives
+nearly every RLS policy in 0012; a null there adds an edge case to all of them and
+introduces a half-registered user state that every screen would have to handle.
+
+**Blocked on the owner:** the actual class names and levels.
+
+### D-066 — Next.js 16 renamed `middleware.ts` to `proxy.ts` ⚠️ TRAP, recorded
+
+Supabase's SSR documentation — and every example of this integration in circulation —
+puts session refresh in `middleware.ts` exporting a function called `middleware`. In
+Next.js 16 that file is deprecated in favour of `proxy.ts` exporting `proxy`
+(`node_modules/next/dist/docs/01-app/02-guides/upgrading/version-16.md`).
+
+The failure mode is what makes this worth writing down: a `middleware.ts` here is not an
+error, it is simply never called. Auth tokens are short-lived, so the app would work
+during development and log people out mid-lecture in production. `pnpm build` confirms
+the file is wired by printing `ƒ Proxy (Middleware)` in the route table.
+
+Note also that `proxy` runs on the nodejs runtime and cannot be set to edge.
+
+### D-067 — Class ids are validated with Zod's `guid()`, not `uuid()` ✅ DECIDED
+
+Caught by a unit test failing against its own fixture. Zod 4's `z.uuid()` enforces the
+RFC 9562 version and variant bits; Postgres's `uuid` type does not, and accepts any 32
+hex digits. Every id in the pgTAP fixtures is of the non-conforming kind, and the seeded
+class list of D-065 will use hand-picked ids too.
+
+Validation stricter than the database is the exact failure this shared-schema layer
+exists to prevent: a signup form refusing a class that genuinely exists, with an error
+message about nothing the student can see or fix.
