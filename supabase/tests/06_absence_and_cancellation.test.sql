@@ -79,10 +79,10 @@ insert into auth.users (instance_id, id, aud, role, email, encrypted_password,
                         created_at, updated_at)
 values ('00000000-0000-0000-0000-000000000000',
         '00000000-0000-0000-0000-0000000000d9', 'authenticated', 'authenticated',
-        '1000009@upsamail.edu.gh', '', now(), now());
+        '10000099@upsamail.edu.gh', '', now(), now());
 insert into public.profiles (id, full_name, index_number, email, class_id)
-values ('00000000-0000-0000-0000-0000000000d9', 'Latecomer', '1000009',
-        '1000009@upsamail.edu.gh'::extensions.citext, t.oid('classA'));
+values ('00000000-0000-0000-0000-0000000000d9', 'Latecomer', '10000099',
+        '10000099@upsamail.edu.gh'::extensions.citext, t.oid('classA'));
 
 -- ---------------------------------------------------------------------------
 -- Who may finish a session, and when

@@ -32,7 +32,7 @@ export function ForgotPasswordForm() {
             autoComplete="username"
             autoCapitalize="none"
             spellCheck={false}
-            placeholder="1000004"
+            placeholder="10000045"
             aria-describedby={describedBy}
             invalid={invalid}
             required
