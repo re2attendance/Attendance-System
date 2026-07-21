@@ -15,7 +15,7 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Attendance",
+  title: "UPSA Attendance",
   description: "Record and verify class attendance.",
 };
 

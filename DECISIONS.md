@@ -1072,3 +1072,38 @@ What was done instead, which addresses most of the cost:
 
 **Ask UPSA's communications office for the official vector.** Until it arrives this is the
 right asset, and swapping it later is a one-file change.
+
+### D-080 — Emoji in headings, and a stacked UPSA wordmark ✅ DONE (asked for by RM)
+
+Requested: a hug on the sign-in heading, a school bag on signup, and the wordmark beside
+the crest changed from "Attendance" to "UPSA" stacked over "Attendance" — without
+distorting the layout. The last clause is the whole engineering problem.
+
+Dropping an emoji into a 2rem heading distorts it in two ways that are invisible on a
+desktop browser and obvious on a phone:
+
+- **It orphans.** At 320px "Create your account 🎒" wraps to three lines and strands the
+  emoji alone on the last. The emoji is therefore bound to the final word inside a
+  `whitespace-nowrap` span, so the pair moves as a unit or not at all.
+- **It grows the line.** Emoji come from a system font whose ascent and descent exceed the
+  Latin face's, so an inline emoji can push the heading's line box taller and shift
+  everything beneath it. `inline-block` with `leading-none` caps the span at its own font
+  size — 25.6px against a 36.8px line box, so it cannot grow it.
+
+Both live in `PageHeading` rather than being repeated per page, which is the point of the
+component: the next screen that wants an emoji gets the defences for free instead of
+rediscovering them.
+
+The emoji is `aria-hidden`. The heading already says everything; "Welcome back, smiling
+face with open hands" is noise.
+
+The wordmark stacks to 30px (15 + 2 + 13, all `leading-none`) against the crest's 44px, and
+the row is `items-center` — so the header measures the same 44px it did before. "UPSA"
+takes the weight as the institution; "Attendance" steps back a shade as the product.
+
+Checked in the compiled CSS rather than assumed, after a first grep wrongly reported the
+arbitrary utilities missing (CSS escapes the dots in `text-[0.8em]`, so the naive pattern
+never matched). Both rules are present.
+
+The app title follows the wordmark to "UPSA Attendance" — otherwise the browser tab was the
+one place still disagreeing with it.
