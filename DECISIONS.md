@@ -400,3 +400,68 @@ default privileges the view re-acquired (it is created after the blanket revokes
 Acceptable here because both environments are under direct control and were verified
 identical afterwards; the delta was applied to hosted explicitly. Not a habit to repeat
 once there are environments we do not control.
+
+---
+
+## 2026-07-21 — Phase 1 backend, part 2 of 2
+
+### D-050 — The write path is proven with pgTAP, run as `authenticated` ✅ DONE
+
+`0013` and `0014` were written but never executed. They now apply from scratch and are
+covered by 82 assertions in `supabase/tests/`, split by concern: capture, verification,
+disputes, scheduling.
+
+Every assertion runs after `set local role authenticated` with a `sub` claim set — the
+same role and the same claim a browser holding the publishable key presents. Testing
+these functions as `postgres` would prove nothing: `postgres` bypasses RLS, so the
+boundary would be invisible and every test would pass whether or not it held.
+
+Two failures during writing were the design working rather than bugs:
+
+- A test helper that looked a record id up as the calling student returned null,
+  because RLS quite correctly hides one student's record from another. The helper had
+  to resolve ids as the owner. **RLS was strong enough to break the test harness.**
+- The same for a session belonging to another class.
+
+### D-051 — The fixture lives outside the test glob ℹ️ NOTED
+
+`supabase test db` runs **every** `.sql` file under `supabase/tests/`, recursively, and
+a shared fixture has no TAP plan, so it fails the run and — worse — executes outside a
+transaction, leaving `schema t` and seven `auth.users` rows behind in the database it
+was run against. The fixture is therefore `fixtures/world.psql`: `\ir` includes it
+happily, and the glob does not match it.
+
+### D-052 — Database tests now gate CI ✅ DONE
+
+A second CI job stands up the real local stack, applies all 14 migrations from scratch,
+and runs the suite. Tests that only ever run on a developer's machine are documentation.
+
+### D-053 — The auto-open fallback is unbuilt ⛔ OPEN — needs a decision
+
+`attendance_settings.auto_open_after_minutes` (default 15) and
+`attendance_windows.auto_opened` were designed in `0007` for the case where a course rep
+forgets to open attendance — "students are never stranded by an absent rep". **Nothing
+implements it.** The setting is read into `effective_settings()` and then ignored; the
+column is never set to true.
+
+So today, a rep who does not tap "open" means nobody in that class can record
+attendance for that lecture, with no recovery path. That is a real availability hole in
+the one flow the system exists for, and it is currently dead configuration — which
+AGENTS.md forbids either way: build it or drop it.
+
+Three ways to close it, in ascending cost:
+
+1. **Lazy auto-open inside `submit_attendance`.** If no window is open and the session
+   started more than `auto_open_after_minutes` ago, the first student's submission opens
+   one, flagged `auto_opened = true`. No scheduler, no new infrastructure. The rep's
+   absence stays countable. Weakest anti-fraud: nobody is demonstrably in the room, so
+   these windows lean entirely on the rep's later approval.
+2. **`pg_cron` job every minute.** Opens windows on schedule, independent of whether any
+   student submits. Cleaner semantics, one more moving part to operate.
+3. **Drop both.** Declare that no rep means no attendance, and delete the setting and the
+   column. Defensible — it makes the rep's presence load-bearing, which is the design's
+   whole anti-fraud premise — but it punishes students for a rep's failure.
+
+**Recommendation: (1).** It fits the existing model, needs no scheduler on the free tier,
+and keeps `auto_opened` as the countable signal that a rep is not doing the job. Not
+implemented pending a decision.
