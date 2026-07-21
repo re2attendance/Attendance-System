@@ -617,3 +617,37 @@ is now turned away instead of receiving a window. That is the intent.
 `finalise_session_attendance` still refuses while any window is open rather than
 assuming the clamp holds — it is one line, and a guard that does not depend on another
 function's invariant is a guard that survives the next change to it.
+
+### D-059 — Supabase Branching is on: pushing to `main` deploys DDL to production ⚠️ DISCOVERED, NOT DECIDED
+
+Found on 2026-07-21 while preparing to push `0016`/`0017` to the hosted database by
+hand. There was nothing to push: the remote already had every object, and
+`supabase_migrations.schema_migrations` already held 17 rows.
+
+The cause is Supabase Branching, enabled 2026-07-19 and bound to the git branch `main`
+(`GET /v1/projects/{ref}/branches` → `git_branch: "main"`, `is_default: true`). It
+applies everything in `supabase/migrations/` to the **production** database on every
+push to `main`. Nobody wrote this down, and the deployment notes only mention Vercel.
+
+**What this means in practice:** `git push origin main` is a production schema
+migration, not just a code deploy. There is no separate promotion step, no approval
+gate, and no staging database in between. CI runs the pgTAP suite on a _pull request_,
+but a direct push to `main` deploys first and tests in parallel — so a migration that
+fails its tests is already live.
+
+Verified rather than assumed: the remote schema was introspected directly and carries
+`rep_cancel_grace_minutes`, `finalise_session_attendance`,
+`void_attendance_on_cancellation`, `sessions.attendance_finalised_at`,
+`records_absent_has_no_checkin`, and the `least(` clamp from `0017`.
+
+**Open question for the owner.** Two things are worth deciding before the frontend
+starts producing riskier migrations:
+
+1. Whether work should move to pull requests, so CI's database job gates `main` instead
+   of racing it. Today the protection exists but runs too late to stop anything.
+2. Whether a destructive migration should ever be able to reach production without a
+   human in the loop. `0016` deletes rows in a trigger; a future one could drop a
+   column. Branching will apply it the moment it is pushed.
+
+Not changed unilaterally — it is a workflow decision, and the current setup is what the
+owner has been using.
