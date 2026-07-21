@@ -8,7 +8,7 @@ import { emailForIdentifier, emailForIndex, signIn, signUp } from "./identity";
 
 const valid = {
   fullName: "Ama Mensah",
-  indexNumber: "1000004",
+  indexNumber: "10000045",
   password: "correct horse battery",
   classId: "00000000-0000-0000-0000-0000000000e1",
 };
@@ -19,12 +19,18 @@ describe("signUp", () => {
   });
 
   // profiles_index_is_7_digits
-  it.each(["100004", "10000045", "100000a", "", " 1000004 x"])(
+  it.each(["1000004", "100000456", "1000004a", "", " 10000045 x"])(
     "rejects the index number %j",
     (indexNumber) => {
       expect(signUp.safeParse({ ...valid, indexNumber }).success).toBe(false);
     },
   );
+
+  // 0021 moved the length from 7 to 8. Pinned explicitly, because a stray edit back to
+  // {7} would otherwise only surface as Postgres rejecting a row the form had accepted.
+  it("rejects the 7-digit index numbers that 0004 used to allow", () => {
+    expect(signUp.safeParse({ ...valid, indexNumber: "1000004" }).success).toBe(false);
+  });
 
   it("rejects a password under 8 characters", () => {
     expect(signUp.safeParse({ ...valid, password: "short12" }).success).toBe(false);
@@ -61,19 +67,19 @@ describe("signUp", () => {
 
 describe("emailForIndex", () => {
   it("builds the address 0004 expects", () => {
-    expect(emailForIndex("1000004")).toBe("1000004@upsamail.edu.gh");
+    expect(emailForIndex("10000045")).toBe("10000045@upsamail.edu.gh");
   });
 
   // profiles.email is citext, so the database treats these as one address. Anything we
   // derive has to agree with that or the uniqueness check happens on the wrong string.
   it("is lowercase, matching the citext column", () => {
-    expect(emailForIndex("1000004")).toBe(emailForIndex("1000004").toLowerCase());
+    expect(emailForIndex("10000045")).toBe(emailForIndex("10000045").toLowerCase());
   });
 });
 
 describe("signIn", () => {
-  it("accepts a 7-digit index number", () => {
-    expect(signIn.safeParse({ identifier: "1000004", password: "x" }).success).toBe(true);
+  it("accepts an 8-digit index number", () => {
+    expect(signIn.safeParse({ identifier: "10000045", password: "x" }).success).toBe(true);
   });
 
   // The admin has no index number and no profile (0004), so the same field has to take
@@ -89,17 +95,17 @@ describe("signIn", () => {
   it("accepts any non-empty password", () => {
     // An account may predate a password-rule change; the login form is the wrong place
     // to tell someone their existing password is too short.
-    expect(signIn.safeParse({ identifier: "1000004", password: "old" }).success).toBe(true);
+    expect(signIn.safeParse({ identifier: "10000045", password: "old" }).success).toBe(true);
   });
 
   it("requires a password", () => {
-    expect(signIn.safeParse({ identifier: "1000004", password: "" }).success).toBe(false);
+    expect(signIn.safeParse({ identifier: "10000045", password: "" }).success).toBe(false);
   });
 });
 
 describe("emailForIdentifier", () => {
   it("expands an index number into its university address", () => {
-    expect(emailForIdentifier("1000004")).toBe("1000004@upsamail.edu.gh");
+    expect(emailForIdentifier("10000045")).toBe("10000045@upsamail.edu.gh");
   });
 
   it("passes an address through untouched but lowercased", () => {

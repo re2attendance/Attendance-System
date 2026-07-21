@@ -8,7 +8,7 @@
 begin;
 \ir fixtures/world.psql
 
-select plan(6);
+select plan(8);
 
 -- ---------------------------------------------------------------------------
 -- The institution-wide attendance policy
@@ -56,6 +56,31 @@ select ok(
   'an unauthenticated visitor can read the class list, or nobody can sign up'
 );
 reset role;
+
+-- ---------------------------------------------------------------------------
+-- Identity shape (0021)
+--
+-- The fixture is full of 8-digit index numbers, so 8 being *accepted* is proven by every
+-- other suite in the directory — they would all fail to load otherwise. What that does
+-- not prove is that 7 is refused, which is the direction a regression would take.
+-- ---------------------------------------------------------------------------
+select throws_ok(
+  $$ insert into public.profiles (id, full_name, index_number, email, class_id)
+     values ('00000000-0000-0000-0000-0000000000f9', 'Seven', '1000004',
+             '1000004@upsamail.edu.gh'::extensions.citext,
+             '00000000-0000-0000-0000-0000000000e1') $$,
+  '23514', null,
+  'a 7-digit index number is refused by the database, not merely by the form'
+);
+
+select throws_ok(
+  $$ insert into public.profiles (id, full_name, index_number, email, class_id)
+     values ('00000000-0000-0000-0000-0000000000f8', 'Nine', '100000456',
+             '100000456@upsamail.edu.gh'::extensions.citext,
+             '00000000-0000-0000-0000-0000000000e1') $$,
+  '23514', null,
+  'and so is a 9-digit one'
+);
 
 select * from finish();
 rollback;

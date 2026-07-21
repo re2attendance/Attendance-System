@@ -22,12 +22,12 @@ export function SignInForm() {
             name="identifier"
             // inputMode over type="number": a numeric keypad without the spinner, the
             // scroll-wheel value changes, or the silent dropping of a leading zero that
-            // type="number" does to an identifier like 0100045.
+            // type="number" does to an identifier like 01000450.
             inputMode="numeric"
             autoComplete="username"
             autoCapitalize="none"
             spellCheck={false}
-            placeholder="1000004"
+            placeholder="10000045"
             aria-describedby={describedBy}
             invalid={invalid}
             required

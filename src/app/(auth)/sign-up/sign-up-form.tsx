@@ -38,7 +38,7 @@ export function SignUpForm({ classes }: { classes: ClassOption[] }) {
       <div>
         <Field
           label="Index number"
-          hint={complete ? undefined : "The 7 digits on your student ID."}
+          hint={complete ? undefined : "The 8 digits on your student ID."}
         >
           {({ id, describedBy, invalid }) => (
             <Input
@@ -46,14 +46,14 @@ export function SignUpForm({ classes }: { classes: ClassOption[] }) {
               name="indexNumber"
               value={indexNumber}
               onChange={(event) =>
-                // Digits only, capped at 7. Filtering as they type is gentler than
+                // Digits only, capped at 8. Filtering as they type is gentler than
                 // accepting a wrong value and rejecting it after they press the button.
-                setIndexNumber(event.target.value.replace(/\D/g, "").slice(0, 7))
+                setIndexNumber(event.target.value.replace(/\D/g, "").slice(0, 8))
               }
               inputMode="numeric"
               autoComplete="username"
               spellCheck={false}
-              placeholder="1000004"
+              placeholder="10000045"
               aria-describedby={describedBy}
               invalid={invalid}
               required

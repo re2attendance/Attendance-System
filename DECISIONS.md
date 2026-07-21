@@ -1107,3 +1107,31 @@ never matched). Both rules are present.
 
 The app title follows the wordmark to "UPSA Attendance" — otherwise the browser tab was the
 one place still disagreeing with it.
+
+### D-081 — Index numbers are 8 digits, correcting 0004 ✅ DONE (by RM)
+
+`0004` had the index number at 7. It is 8. `0021` moves both constraints that encode the
+length, and they have to move together: `profiles_index_is_8_digits`, and
+`profiles_email_shape` — because `profiles_email_matches_index` requires the address to
+begin with the index, so an 8-digit index inside a 7-digit address shape is a row that can
+satisfy neither.
+
+Safe without a data migration: `profiles` is empty. Signup had been reachable for under a
+day and no student account existed. Had there been rows, `alter table … add constraint`
+would have rejected the change outright rather than corrupting anything — which is the
+behaviour to want, and the reason this is a constraint rather than application logic.
+
+Not marked `DESTRUCTIVE` for the migration guard: dropping a CHECK removes a rule, not a
+row.
+
+**The length was written down in seven places, and the tests were the trap.** Beyond the
+two constraints: the Zod regex, its error message, the input's `slice(0, 7)` cap, the
+placeholder on three screens, the pgTAP fixture's six index numbers, and the unit tests —
+where `"10000045"` sat in the list of values expected to be _rejected_. Changing the rule
+without changing that list would have left a test asserting the new valid input is invalid,
+and it would have failed loudly; the worse version is the one that passes for the wrong
+reason.
+
+A regression assertion now pins the direction at the database rather than only in Zod: a
+7-digit index is refused by Postgres, not merely by the form. Every other suite proves 8 is
+accepted, since the fixture is built from 8-digit numbers and would fail to load otherwise.
