@@ -9,7 +9,7 @@ import { Field, Input } from "@/components/ui/field";
 import { FormError } from "@/components/ui/form-error";
 import { signUpWithPassword } from "@/lib/auth/actions";
 import { env } from "@/lib/env";
-import { INDEX_NUMBER } from "@/lib/validation/identity";
+import { INDEX_LENGTH, INDEX_NUMBER } from "@/lib/validation/identity";
 
 export function SignUpForm({ classes }: { classes: ClassOption[] }) {
   const [result, submit, pending] = useActionState(signUpWithPassword, undefined);
@@ -38,7 +38,7 @@ export function SignUpForm({ classes }: { classes: ClassOption[] }) {
       <div>
         <Field
           label="Index number"
-          hint={complete ? undefined : "The 8 digits on your student ID."}
+          hint={complete ? undefined : `The ${INDEX_LENGTH} digits on your student ID.`}
         >
           {({ id, describedBy, invalid }) => (
             <Input
@@ -46,9 +46,9 @@ export function SignUpForm({ classes }: { classes: ClassOption[] }) {
               name="indexNumber"
               value={indexNumber}
               onChange={(event) =>
-                // Digits only, capped at 8. Filtering as they type is gentler than
+                // Digits only, capped at the index length. Filtering as they type is gentler than
                 // accepting a wrong value and rejecting it after they press the button.
-                setIndexNumber(event.target.value.replace(/\D/g, "").slice(0, 8))
+                setIndexNumber(event.target.value.replace(/\D/g, "").slice(0, INDEX_LENGTH))
               }
               inputMode="numeric"
               autoComplete="username"

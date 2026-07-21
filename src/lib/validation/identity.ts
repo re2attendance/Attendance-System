@@ -10,8 +10,14 @@ import { z } from "zod";
 
 import { env } from "@/lib/env";
 
-// profiles_index_is_8_digits (0021)
-export const INDEX_NUMBER = /^[0-9]{8}$/;
+// profiles_index_is_8_digits (0021).
+//
+// The length is a constant and every message is built from it, because it has already gone
+// wrong once: 0021 moved the rule from 7 to 8 and left "Enter your 7-digit index number"
+// on the reset screen, telling students the opposite of what the form would accept. A
+// hardcoded number in prose is a second source of truth that nothing checks.
+export const INDEX_LENGTH = 8;
+export const INDEX_NUMBER = new RegExp(`^[0-9]{${INDEX_LENGTH}}$`);
 
 /** The address 0004 would build for this index. */
 export function emailForIndex(indexNumber: string): string {
@@ -21,7 +27,9 @@ export function emailForIndex(indexNumber: string): string {
 export const indexNumber = z
   .string()
   .trim()
-  .regex(INDEX_NUMBER, { error: "An index number is exactly 8 digits." });
+  .regex(INDEX_NUMBER, {
+    error: `An index number is exactly ${INDEX_LENGTH} digits.`,
+  });
 
 // profiles_email_shape, with the domain pinned to this institution. 0004 enforces the
 // shape; the specific domain is configuration, so it is enforced here and at signup.
@@ -63,15 +71,15 @@ export const signUp = z.object({
   classId: z.guid({ error: "Choose your class." }),
 });
 
-// One field for both kinds of account. A student types 8 digits; the admin has no index
-// number and no profile (0004), so they type the address their account was created with.
+// One field for both kinds of account. A student types their index number; the admin has no
+// index number and no profile (0004), so they type the address the account was made with.
 // Two labelled fields would make one of them dead weight for everybody.
 export const signInIdentifier = z
   .string()
   .trim()
   .toLowerCase()
   .refine((value) => INDEX_NUMBER.test(value) || z.email().safeParse(value).success, {
-    error: "Enter your 7-digit index number, or your email address.",
+    error: `Enter your ${INDEX_LENGTH}-digit index number, or your email address.`,
   });
 
 export const signIn = z.object({
