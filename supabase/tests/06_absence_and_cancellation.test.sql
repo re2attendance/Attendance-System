@@ -10,7 +10,7 @@
 begin;
 \ir fixtures/world.psql
 
-select plan(28);
+select plan(29);
 
 -- The roster predates the lectures, as a real cohort does. Without this every
 -- profile in the fixture is younger than the sessions below and the "nobody is absent
@@ -64,7 +64,9 @@ insert into t.s values
   ('never',     t.mk_session(interval '-300 minutes', interval '-240 minutes')),
   ('stillopen', t.mk_session(interval '-160 minutes', interval '-100 minutes')),
   ('stale',     t.mk_session(interval  '-90 minutes', interval  '-50 minutes')),
-  ('live',      t.mk_session(interval  '-10 minutes', interval  '50 minutes'));
+  -- Twenty minutes left to run, against a 30-minute first window: short on purpose,
+  -- so opening attendance has to be clamped to the lecture (D-058).
+  ('live',      t.mk_session(interval  '-10 minutes', interval  '20 minutes'));
 
 -- 'stillopen' ran and ended, but the window the rep opened outlives it: a rep-opened
 -- window is not clamped to the lecture the way an auto-opened one is.
@@ -236,6 +238,16 @@ set local role authenticated;
 select t.login(t.uid('rep1'));
 select public.open_attendance_window(t.s_id('live'));
 
+reset role;
+-- The first window is 30 minutes and this lecture has 20 left. A window that
+-- outlives its lecture is a window for submitting from somewhere else (D-058).
+select is(
+  (select w.closes_at from public.attendance_windows w where w.session_id = t.s_id('live')),
+  (select s.ends_at   from public.sessions s          where s.id         = t.s_id('live')),
+  'a rep-opened window is clamped to the lecture, exactly as an auto-opened one is'
+);
+
+set local role authenticated;
 select t.login(t.uid('stud1'));
 select public.submit_attendance(t.s_id('live'), t.on_campus_lat(), t.on_campus_lng(),
                                 12.0, 'd-stud1');

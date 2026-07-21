@@ -591,17 +591,29 @@ Implemented as a `BEFORE UPDATE OF status` trigger on `sessions` rather than a l
 inside `cancel_session()`, so the invariant holds on every path into `cancelled`: the
 rep's call-off, an admin's, the holiday cascade, and paths not yet written.
 
-### D-058 — A rep-opened attendance window is not clamped to the lecture ⛔ OPEN
+### D-058 — A rep-opened attendance window is clamped to its lecture ✅ DONE
 
-Noticed while building D-056, not fixed, because it is outside what was asked for.
-`open_attendance_window` sets `closes_at = now() + first_window_minutes` with no upper
-bound, so a rep who opens attendance in the last five minutes of a lecture leaves a
-window running 25 minutes after the room has emptied — submittable from anywhere.
+Noticed while building D-056 and fixed in `0017` on the owner's instruction.
+`open_attendance_window` set `closes_at = now() + first_window_minutes` with no upper
+bound, so a rep who opened attendance in the last five minutes of a lecture left a
+window running 25 minutes after the room had emptied — submittable from anywhere on
+campus, by anyone whose friend was still there.
 
-D-054 clamped exactly this for the auto-opened window and gave the reason: "a window
-still open after the session ends is a window for submitting from elsewhere." The same
-argument applies to the rep-opened one; it was simply never applied. The fix is one
-`least(..., v_session.ends_at)`, the same expression `0015` already uses.
+D-054 had clamped exactly this for the auto-opened window and given the reason: "a
+window still open after the session ends is a window for submitting from elsewhere."
+The same argument always applied to the rep-opened path; it was simply never applied.
 
-`finalise_session_attendance` works around it (it refuses while any window is open)
-rather than depending on it, so nothing is currently broken — but the hole is real.
+Two lines. `closes_at` becomes `least(now() + …, ends_at)`, and the end-of-session
+guard becomes strict (`now() >= ends_at` rather than `>`). The second is what stops
+the first from producing a window with no life in it: at the instant `now() = ends_at`
+the clamp would set `closes_at = opened_at`, which the schema's own
+`windows_closes_after_open` check would reject with a confusing message. Refusing to
+open the window is the honest answer, and it keeps the guard from being unreachable
+code.
+
+Behaviour change worth knowing: a rep who taps open in the final seconds of a lecture
+is now turned away instead of receiving a window. That is the intent.
+
+`finalise_session_attendance` still refuses while any window is open rather than
+assuming the clamp holds — it is one line, and a guard that does not depend on another
+function's invariant is a guard that survives the next change to it.
