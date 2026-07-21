@@ -25,8 +25,8 @@ export default function AuthLayout({ children }: Readonly<{ children: React.Reac
           <Image
             src="/upsa-crest.png"
             alt=""
-            width={512}
-            height={673}
+            width={384}
+            height={505}
             priority
             className="h-11 w-auto"
           />

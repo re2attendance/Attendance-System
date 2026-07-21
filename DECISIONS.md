@@ -1007,3 +1007,68 @@ Two implementation notes worth keeping:
   constants and `readTheme()` started in one module; importing `THEMES` into the switch
   dragged `next/headers` into the browser bundle and failed the build. Split into
   `theme.ts` (pure) and `theme-server.ts` (`import "server-only"`).
+
+### D-076 — The first classes and the missing policy row are seeded ✅ DONE
+
+Closes D-065. `0018` seeds the two test cohorts the owner named — **RE1** and **RE2**, both
+at level 100, which is required and must be one of 100/200/300/400 (0003); they exist to
+exercise the system rather than to describe a real year group, and Phase 2's admin CRUD can
+change it.
+
+Seed data lives in a migration rather than `supabase/seed.sql` because Supabase Branching
+applies migrations to production on merge and never runs the seed file (D-059) — a seed
+script would populate every developer's machine and nothing that matters.
+
+**The larger find:** there was no institution-wide `attendance_settings` row anywhere, and
+nothing had ever created one. `effective_settings()` left-joins a class override onto the
+row where `class_id is null`; with no such row it returns **zero rows**, so every function
+built on it — `submit_attendance`, `open_attendance_window`, `decide_attendance`,
+`raise_dispute` — would have failed on a null threshold with a message naming none of that.
+It would have surfaced in Phase 3 as "attendance is broken" with nothing to point at.
+
+The row is seeded with the documented defaults spelled out rather than inherited, so the
+operative policy is readable in one place instead of spread across `0007` and `0016`.
+
+**The campus geofence is deliberately left null**, because nobody has supplied UPSA's
+coordinates. The constraint requires centre and radius together or neither, and
+`submit_attendance` skips the fence entirely when the centre is null — so **the location
+check is currently disabled**. Acceptable only because no attendance exists yet; it must be
+closed before the first real session runs.
+
+### D-077 — `anon` may read `classes`, and nothing else ✅ DONE
+
+0012 states "anon gets nothing anywhere" and revokes every privilege from `anon` across the
+schema. Correct for everything it was written against — attendance, profiles, disputes —
+and wrong for exactly one table, which nothing depended on until signup existed.
+
+A student picks their class **while creating their account**, so that dropdown renders for
+someone with no session. Without this the query returns `permission denied`, the page falls
+back to its empty state, and every visitor is told signing up is not open — with the
+database, the seed and the form all working correctly. There is no error anyone would see.
+
+Found by writing a test that asserted the thing rather than assuming it (`07_seed`), which
+is the only reason it is not shipping. Note the sequence: seeding the classes would have
+looked like it fixed signup and would have changed nothing at all.
+
+The exception is as narrow as it goes — `classes` only, `select` only, and nothing in it is
+confidential: a class is a cohort name and a year of study, printed on every timetable in
+the university. The roster is in `profiles`, which `anon` still cannot touch.
+
+### D-078 — The crest stays a PNG; an SVG is wanted but cannot be fabricated ⛔ OPEN — owner action
+
+The owner asked whether to move the crest to SVG. It would be better — sharper at any size,
+a fraction of the bytes, and recolourable — but it cannot be produced honestly from what we
+have. The source is a 528px JPEG, and an auto-trace or hand-redraw of an official
+university crest is a redrawing of an institutional mark, not a format conversion. Getting
+it subtly wrong is worse than shipping a clean raster.
+
+What was done instead, which addresses most of the cost:
+
+- `public/upsa-crest.png` regenerated at 384px wide with a palette — **223KB → 44KB**. It
+  displays at ~44px, so this is still past 3× DPI.
+- `src/app/icon.png` and `apple-icon.png` added; the project had no favicon at all. Both
+  use the **shield alone** — the ribbon's motto is illegible below about 64px and only adds
+  noise. The touch icon gets a white ground because iOS composites transparency away.
+
+**Ask UPSA's communications office for the official vector.** Until it arrives this is the
+right asset, and swapping it later is a one-file change.
