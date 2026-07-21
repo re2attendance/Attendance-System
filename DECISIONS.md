@@ -512,3 +512,96 @@ Banked while deciding D-054. A session whose attendance never opened stays `sche
 rather than `held`, so it is already distinguishable in the data. When the analytics
 land, the denominator must be **sessions that actually opened attendance** — otherwise
 a lecture nobody could record counts as an absence against every student in the class.
+
+Half-closed by D-056: the rule is now enforced at write time — a session that never
+opened attendance cannot be finalised, so it produces no absences at all. The analytics
+side is still open, because a rate is a query and this only fixes the ledger.
+
+### D-056 — A student who never submits is marked `absent` ✅ DONE (asked for by RM)
+
+Until now absence was the absence of evidence: no row at all. That is clean in the
+schema and useless everywhere else — nothing to show the student, nothing to dispute,
+and a denominator every future query would have to reconstruct by anti-joining the
+roster. `0016` makes it a fourth `status` on `attendance_records`.
+
+**When they are written** — an explicit `finalise_session_attendance(session)` that a
+course rep calls at the end of their verification queue, not a scheduled sweep. Chosen
+over `pg_cron` for the same reason as D-054: this system has no always-on background
+process, and adding one that silently writes verdicts about students is the worst
+possible first candidate. It was also chosen over materialising absences lazily on read,
+which would have made a student refreshing their own history the act that creates their
+own absence.
+
+The cost is real and should be stated: **if no rep ever taps finish, the absences never
+exist.** That is the same exposure the pending queue already has — a rep who never
+verifies leaves records pending forever — so it does not add a new class of failure, and
+`sessions.attendance_finalised_at` makes an unfinished session visible to the admin.
+
+Five guards, all of them load-bearing:
+
+- **Only a `held` session.** A lecture where attendance never opened is one nobody
+  _could_ have recorded; marking its whole cohort absent would punish every student for
+  a failure that was never theirs. This is D-055 enforced at the only point that can.
+- **Only after the lecture has ended**, and **only when no window is still open.** Both
+  are needed: a rep-opened window is not clamped to `ends_at` the way an auto-opened one
+  is (D-054), so one can outlive the lecture.
+- **Only students who existed before the lecture ended.** Nobody is absent from a class
+  that happened before they had an account.
+- **Idempotent.** Three reps share a class; the second one to tap finish marks nobody
+  twice.
+
+An absent record carries a `dispute_deadline` like any other verdict, because a flat
+battery is precisely the case the dispute route exists for. It carries
+`verification_route = 'no_submission'` and, by CHECK constraint, no `first_checkin_id`
+and no `minutes_late` — "absent" means "never submitted", stated as a constraint rather
+than as a rule some future function is trusted to remember.
+
+Note what this deliberately does **not** allow: a rep cannot approve an absent record.
+`decide_attendance` only touches `pending`, so the only route out of an absence is a
+dispute judged by an admin. That is a feature — otherwise a rep could mark friends
+present who never submitted anything at all, which is the original paper-sheet fraud
+with a database behind it.
+
+### D-057 — A course rep may call off a lecture in its first 45 minutes ✅ DONE (asked for by RM)
+
+Supersedes the cancellation half of D-020, which let a rep cancel only _before_
+attendance had opened. That was too tight for the case it most needed to handle: a
+lecturer who turns up, talks for twenty minutes and leaves. Attendance had opened, so
+only an admin could say the session did not count — for something the rep watched
+happen and the admin did not.
+
+The rule is now time-boxed instead of state-boxed: a rep may cancel inside
+`rep_cancel_grace_minutes` of the start, whether or not a window exists. 45 by default,
+and a setting rather than a literal like every other threshold here (D-013).
+
+**D-020's actual worry survives past the grace.** A retroactive cancellation is how a
+rep erases their own absence, so after 45 minutes it is admin-only. What changed is the
+size of the hole, not its existence: a rep can now void a lecture they attended, within
+45 minutes of its start. That is bounded, it is in the audit log, and the check-ins that
+prove people were in the room are kept.
+
+**Cancelling voids the attendance already collected.** A cancelled session leaves every
+denominator, so leaving approved records inside one contradicts "rates are over held
+sessions only". The records are deleted; the **check-ins, flags and audit entries are
+not**, which is what makes a rep who cancels lectures they did attend visible rather
+than merely unlucky. Disputes cascade with their records — the audit log is where that
+history survives.
+
+Implemented as a `BEFORE UPDATE OF status` trigger on `sessions` rather than a line
+inside `cancel_session()`, so the invariant holds on every path into `cancelled`: the
+rep's call-off, an admin's, the holiday cascade, and paths not yet written.
+
+### D-058 — A rep-opened attendance window is not clamped to the lecture ⛔ OPEN
+
+Noticed while building D-056, not fixed, because it is outside what was asked for.
+`open_attendance_window` sets `closes_at = now() + first_window_minutes` with no upper
+bound, so a rep who opens attendance in the last five minutes of a lecture leaves a
+window running 25 minutes after the room has emptied — submittable from anywhere.
+
+D-054 clamped exactly this for the auto-opened window and gave the reason: "a window
+still open after the session ends is a window for submitting from elsewhere." The same
+argument applies to the rep-opened one; it was simply never applied. The fix is one
+`least(..., v_session.ends_at)`, the same expression `0015` already uses.
+
+`finalise_session_attendance` works around it (it refuses while any window is open)
+rather than depending on it, so nothing is currently broken — but the hole is real.

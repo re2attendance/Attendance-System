@@ -52,6 +52,10 @@ See BUILD-PLAN.md §2.5 and §10.
   disabling RLS on one of them — is how these systems leak.
 - **Attendance denominators.** Cancelled and holiday sessions must be excluded. Rates
   are over _held_ sessions only, or a holiday week silently drops everyone's percentage.
+  Since 0016 the denominator is narrower still: **held _and_ finalised**. A held session
+  that no rep has finished yet has no `absent` rows, so counting it treats every
+  non-submitter as if they were never enrolled. `sessions.attendance_finalised_at` is
+  the flag to filter on (D-055, D-056).
 - **GPS is a deterrent, not proof.** Browser geolocation is trivially spoofed. Never
   treat a passing geofence check as evidence of presence. See
   `docs/02-ATTENDANCE-INTEGRITY.md`.
