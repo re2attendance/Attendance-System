@@ -110,10 +110,16 @@ insert into public.role_assignments (user_id, role, class_id, rep_slot) values
 -- ---------------------------------------------------------------------------
 -- Policy. One institution-wide row; the campus sits on UPSA, Accra.
 -- ---------------------------------------------------------------------------
-insert into public.attendance_settings (class_id, campus_center, campus_radius_m)
-values (null,
-        extensions.st_setsrid(extensions.st_makepoint(-0.1870, 5.6037), 4326)::extensions.geography,
-        300);
+-- Updated, not inserted: 0018 seeds the institution-wide row and a unique index allows
+-- exactly one, so inserting a second is a constraint violation that takes down the whole
+-- fixture — and with it every test in the file, reported only as "No plan found".
+-- The migration leaves the fence null (no campus coordinates supplied yet); the tests
+-- need one, so this is where it is set.
+update public.attendance_settings
+   set campus_center = extensions.st_setsrid(
+         extensions.st_makepoint(-0.1870, 5.6037), 4326)::extensions.geography,
+       campus_radius_m = 300
+ where class_id is null;
 
 -- Coordinates the tests submit from.
 create or replace function t.on_campus_lat()  returns double precision language sql as $$ select 5.6037 $$;
