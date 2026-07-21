@@ -92,8 +92,9 @@ export async function signOut() {
 }
 
 /**
- * Finishes an account that authenticated before it had a profile — every Google signup,
- * since Google can tell us the address and the name but not which class they are in.
+ * Finishes an account that authenticated before it had a profile: one created outside the
+ * signup form, or one whose stored details no longer satisfy the schema — a class that has
+ * since been deleted, say.
  */
 export async function completeProfile(
   _prev: ActionResult,
@@ -114,8 +115,8 @@ export async function completeProfile(
     return { error: parsed.error.issues[0]?.message ?? "Check your details." };
   }
 
-  // The index comes from the address Google proved, never from the form. Typing it would
-  // reopen exactly the mismatch that 0004 forbids and that D-069 designed away.
+  // The index comes from the confirmed address, never from the form. Typing it would reopen
+  // exactly the mismatch that 0004 forbids and that D-069 designed away.
   const indexNumber = user.email.split("@")[0];
 
   const { error } = await supabase.from("profiles").insert({

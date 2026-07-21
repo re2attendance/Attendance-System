@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
  *
  * It lives in the layout rather than in each page because there are several ways to arrive
  * with a session and no profile, and only one of them used to be handled. `/auth/callback`
- * called `destinationFor` after a Google sign-in or a confirmation link; signing in with a
+ * called `destinationFor` after a confirmation link; signing in with a
  * password redirected straight to `/dashboard`, which never asked whether the account had
  * finished onboarding — so anyone whose confirmation link had not completed landed on a
  * dashboard they could not use and had no route out of.
@@ -17,8 +17,8 @@ import { createClient } from "@/lib/supabase/server";
  * confirmation link pointed at `localhost` because the Site URL was never set. The account
  * was confirmed, carried complete metadata, and still had no profile.
  *
- * A guard at the destination survives every entry path — password, Google, a bookmark,
- * a link shared between devices — including the ones added later.
+ * A guard at the destination survives every entry path — password, a bookmark, a link
+ * shared between devices — including the ones added later.
  */
 export default async function AppLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const supabase = await createClient();

@@ -6,9 +6,8 @@ import { INDEX_NUMBER } from "@/lib/validation/identity";
  * Where a freshly authenticated user should land.
  *
  * A Supabase auth user is not yet a student: `profiles` is what makes them one (0004).
- * Both routes in — Google, and a confirmed password signup — arrive here with a session
- * and no profile row, so this is the single place that decides whether we can create one
- * or have to ask for the missing piece.
+ * A confirmed signup arrives here with a session and no profile row, so this is the single
+ * place that decides whether we can create one or have to ask for the missing piece.
  */
 export async function destinationFor(
   supabase: SupabaseClient,
@@ -28,8 +27,9 @@ export async function destinationFor(
   const classId = user.user_metadata?.class_id;
   const fullName = user.user_metadata?.full_name ?? user.user_metadata?.name;
 
-  // Google gives us a name and a proven address but no class, so that path always lands
-  // on /complete-profile the first time.
+  // Signup stores all three, so this normally passes and the profile is created here.
+  // It fails for an account created outside the signup form — the admin, made by hand in
+  // the dashboard — which is why /complete-profile still exists as the way back.
   if (
     typeof indexNumber !== "string" ||
     typeof classId !== "string" ||
