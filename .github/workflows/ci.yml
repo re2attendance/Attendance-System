@@ -64,6 +64,10 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          # setup-node reads `packageManager` from package.json and goes looking for
+          # pnpm to populate its cache. This job installs nothing, so pnpm is not here
+          # and the lookup fails the step before the guard ever runs.
+          package-manager-cache: false
 
       # Called directly rather than through pnpm: the script uses only node builtins,
       # so this job needs no install step at all.
