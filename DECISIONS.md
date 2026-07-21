@@ -1135,3 +1135,48 @@ reason.
 A regression assertion now pins the direction at the database rather than only in Zod: a
 7-digit index is refused by Postgres, not merely by the form. Every other suite proves 8 is
 accepted, since the fixture is built from 8-digit numbers and would fail to load otherwise.
+
+### D-082 — Supabase Auth Site URL was localhost, and it cost the first real signup ✅ FIXED
+
+Set via the Management API on 2026-07-21, using a token the owner supplied:
+
+| Setting               | Was                     | Now                                                          |
+| --------------------- | ----------------------- | ------------------------------------------------------------ |
+| `site_url`            | `http://localhost:3000` | the Vercel URL                                               |
+| `uri_allow_list`      | empty                   | prod `/auth/callback` and `/**`, plus the same for localhost |
+| `password_min_length` | 6                       | 8                                                            |
+
+**This was not theoretical.** Production already held two signups and **zero profiles**. The
+second had confirmed its email and carried complete, valid metadata — index `10344923`,
+class RE2, full name — and still had no profile row, because the confirmation link Supabase
+sent pointed at `localhost:3000`. The student clicked it, nothing was listening, and
+`/auth/callback` never ran.
+
+`password_min_length` was raised because Zod required 8 while Supabase would have accepted 6
+through its own password-reset endpoint, which does not pass through our form. The server
+has to be the authority or the rule is decoration — the same argument the schema constraints
+make against validating only in the client.
+
+Left alone deliberately: `mailer_autoconfirm` stays false (D-064 wants confirmation), and
+SMTP is still unset, so mail goes through Supabase's built-in sender at
+**`rate_limit_email_sent = 2` per hour**. That is the number that makes Resend necessary,
+now measured rather than asserted.
+
+### D-083 — The signed-in area is gated in a layout, not per page ✅ DONE
+
+Found by reading production data rather than by testing. `/auth/callback` called
+`destinationFor()` after Google or a confirmation link, but `signInWithPassword` redirected
+straight to `/dashboard`, which only checked for a session — never for a profile.
+
+So a confirmed account whose callback never completed could sign in with its password, land
+on a dashboard it could not use, and have **no route to finish onboarding**. That is the
+exact state the first real signup was left in by D-082.
+
+The guard now lives in `(app)/layout.tsx`, which every signed-in page inherits. A guard at
+the destination survives every entry path — password, Google, a bookmark, a link opened on
+another device — including paths added later. It short-circuits on one indexed lookup when a
+profile exists, and reuses `destinationFor()`, so an account carrying complete signup
+metadata gets its profile created rather than being asked for the same details twice.
+
+The dashboard keeps its own session check. It is one line, it makes the page safe to read on
+its own terms, and it is what tells the type checker the user is not null.
