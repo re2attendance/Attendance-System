@@ -11,10 +11,17 @@ export const dynamic = "force-dynamic";
 
 async function checkSupabase(): Promise<{ ok: boolean; detail: string }> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (!url) return { ok: false, detail: "NEXT_PUBLIC_SUPABASE_URL is not set" };
+  if (!key) return { ok: false, detail: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY is not set" };
 
   try {
-    const res = await fetch(`${url}/auth/v1/health`, { cache: "no-store" });
+    // Every Supabase endpoint, health included, requires the apikey header —
+    // without it this returns 401 and looks like an outage rather than a bad request.
+    const res = await fetch(`${url}/auth/v1/health`, {
+      headers: { apikey: key },
+      cache: "no-store",
+    });
     return res.ok
       ? { ok: true, detail: `reachable (${res.status})` }
       : { ok: false, detail: `responded ${res.status}` };
