@@ -1,0 +1,149 @@
+-- Shared fixture for the pgTAP suite. Included with \ir from each *.test.sql, so it
+-- never runs on its own and never reaches a real database — every test file wraps it
+-- in a transaction that is rolled back.
+--
+-- It lives outside supabase/tests/ deliberately: `supabase test db` runs every .sql
+-- file in that directory, and a fixture with no plan fails the whole run.
+--
+-- Fixed UUIDs rather than generated ones: a failing assertion should name the actor
+-- ("rep1 could decide their own attendance"), not a random uuid.
+
+create extension if not exists pgtap with schema extensions;
+
+create schema t;
+grant usage on schema t to public;
+
+-- Who is calling. Tests pair this with an explicit `set local role authenticated;`
+-- so the caller is exactly what PostgREST would present: the authenticated role
+-- carrying a sub claim, with RLS live.
+create or replace function t.login(p_user uuid) returns void
+language plpgsql as $$
+begin
+  perform set_config(
+    'request.jwt.claims',
+    json_build_object('sub', p_user::text, 'role', 'authenticated')::text,
+    true
+  );
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Actors
+-- ---------------------------------------------------------------------------
+create table t.who (name text primary key, id uuid not null, index_number text);
+insert into t.who (name, id, index_number) values
+  ('admin',   '00000000-0000-0000-0000-0000000000a1', null),
+  ('rep1',    '00000000-0000-0000-0000-0000000000b1', '1000001'),
+  ('rep2',    '00000000-0000-0000-0000-0000000000b2', '1000002'),
+  ('watcher', '00000000-0000-0000-0000-0000000000c1', '1000003'),
+  ('stud1',   '00000000-0000-0000-0000-0000000000d1', '1000004'),
+  ('stud2',   '00000000-0000-0000-0000-0000000000d2', '1000005'),
+  ('outsider','00000000-0000-0000-0000-0000000000d3', '1000006');
+
+create or replace function t.index_of(p_name text) returns text
+language sql stable as $$ select index_number from t.who where name = p_name $$;
+
+create or replace function t.uid(p_name text) returns uuid
+language sql stable as $$ select id from t.who where name = p_name $$;
+
+create table t.thing (name text primary key, id uuid not null);
+insert into t.thing (name, id) values
+  ('classA',  '00000000-0000-0000-0000-0000000000e1'),
+  ('classB',  '00000000-0000-0000-0000-0000000000e2'),
+  ('course',  '00000000-0000-0000-0000-0000000000e3'),
+  ('room',    '00000000-0000-0000-0000-0000000000e4'),
+  ('lecturer','00000000-0000-0000-0000-0000000000e5'),
+  ('semester','00000000-0000-0000-0000-0000000000e6');
+
+create or replace function t.oid(p_name text) returns uuid
+language sql stable as $$ select id from t.thing where name = p_name $$;
+
+-- ---------------------------------------------------------------------------
+-- auth.users — the identities Supabase Auth would have created
+-- ---------------------------------------------------------------------------
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password,
+                        created_at, updated_at)
+select '00000000-0000-0000-0000-000000000000', w.id, 'authenticated', 'authenticated',
+       case w.name when 'admin' then 'admin@upsamail.edu.gh'
+                   else t.index_of(w.name) || '@upsamail.edu.gh' end,
+       '', now(), now()
+from t.who w;
+
+-- ---------------------------------------------------------------------------
+-- Academic structure
+-- ---------------------------------------------------------------------------
+insert into public.classes (id, name, level) values
+  (t.oid('classA'), 'BSc IT Level 100 A', 100),
+  (t.oid('classB'), 'BSc IT Level 100 B', 100);
+
+insert into public.courses (id, code, title)
+values (t.oid('course'), 'ITC101', 'Introduction to Computing');
+
+insert into public.class_courses (class_id, course_id) values
+  (t.oid('classA'), t.oid('course')),
+  (t.oid('classB'), t.oid('course'));
+
+insert into public.rooms (id, name) values (t.oid('room'), 'Lecture Hall 1');
+insert into public.lecturers (id, full_name) values (t.oid('lecturer'), 'Dr Mensah');
+
+-- A semester containing today, with the exam period at the far end so session
+-- generation has both teaching days and skipped days to work with.
+insert into public.semesters (id, name, starts_on, ends_on, exam_starts_on, exam_ends_on)
+values (t.oid('semester'), 'Test Semester',
+        current_date - 30, current_date + 60, current_date + 45, current_date + 60);
+
+-- ---------------------------------------------------------------------------
+-- Profiles. Admin has none by design (0004): an admin is not a student.
+-- ---------------------------------------------------------------------------
+insert into public.profiles (id, full_name, index_number, email, class_id)
+select w.id, initcap(w.name), t.index_of(w.name),
+       (t.index_of(w.name) || '@upsamail.edu.gh')::extensions.citext,
+       case w.name when 'outsider' then t.oid('classB') else t.oid('classA') end
+from t.who w
+where w.name <> 'admin';
+
+insert into public.role_assignments (user_id, role, class_id, rep_slot) values
+  (t.uid('admin'),   'admin',      null,            null),
+  (t.uid('rep1'),    'course_rep', t.oid('classA'), 1),
+  (t.uid('rep2'),    'course_rep', t.oid('classA'), 2),
+  (t.uid('watcher'), 'watcher',    t.oid('classA'), null);
+
+-- ---------------------------------------------------------------------------
+-- Policy. One institution-wide row; the campus sits on UPSA, Accra.
+-- ---------------------------------------------------------------------------
+insert into public.attendance_settings (class_id, campus_center, campus_radius_m)
+values (null,
+        extensions.st_setsrid(extensions.st_makepoint(-0.1870, 5.6037), 4326)::extensions.geography,
+        300);
+
+-- Coordinates the tests submit from.
+create or replace function t.on_campus_lat()  returns double precision language sql as $$ select 5.6037 $$;
+create or replace function t.on_campus_lng()  returns double precision language sql as $$ select -0.1870 $$;
+create or replace function t.off_campus_lat() returns double precision language sql as $$ select 5.6037 $$;
+create or replace function t.off_campus_lng() returns double precision language sql as $$ select -0.5000 $$;
+
+-- A live session for classA: started five minutes ago, runs for another hour.
+create or replace function t.live_session() returns uuid
+language plpgsql as $$
+declare v_id uuid;
+begin
+  insert into public.sessions (semester_id, class_id, course_id, room_id, lecturer_id,
+                               starts_at, ends_at)
+  values (t.oid('semester'), t.oid('classA'), t.oid('course'), t.oid('room'),
+          t.oid('lecturer'), now() - interval '5 minutes', now() + interval '55 minutes')
+  returning id into v_id;
+  return v_id;
+end $$;
+
+-- Somewhere for a test to park the ids it creates, so they survive the role
+-- switches without needing a psql variable.
+create table t.ctx (session_id uuid, record_id uuid, dispute_id uuid);
+create or replace function t.session() returns uuid
+language sql stable as $$ select session_id from t.ctx $$;
+create or replace function t.record() returns uuid
+language sql stable as $$ select record_id from t.ctx $$;
+create or replace function t.dispute() returns uuid
+language sql stable as $$ select dispute_id from t.ctx $$;
+
+-- The tests run as `authenticated`, which has no rights on this schema by default.
+grant select on all tables in schema t to public;
+grant execute on all functions in schema t to public;

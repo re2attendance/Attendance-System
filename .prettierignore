@@ -1,0 +1,11 @@
+# Prettier does not read .gitignore, so anything ignored there that Prettier can
+# still parse has to be repeated here or `format:check` fails on scratch files.
+.next
+node_modules
+pnpm-lock.yaml
+tsconfig.tsbuildinfo
+
+# Supabase CLI working directories: catalog dumps and branch state, regenerated on
+# every `db reset` and never committed.
+supabase/.temp
+supabase/.branches
