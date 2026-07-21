@@ -295,3 +295,55 @@ compromised. Nothing in the current codebase uses it; rotating breaks nothing.
 before this session pushed them. Consistent with `supabase db push` having been run by
 the owner. Recorded because for a system whose premise is a trustworthy audit trail,
 "who can change the database" is itself worth writing down.
+
+---
+
+## 2026-07-21 — RLS-bypassing credentials eliminated (closes D-039)
+
+### D-041 — Legacy API keys disabled, not rotated ✅ DONE
+
+The request was to rotate `service_role`. Disabling the legacy keys is strictly better:
+rotation mints a **new** `service_role` key that still bypasses RLS — the same hole with
+a different value — whereas disabling removes the capability. It is also a reversible
+toggle (`PUT /v1/projects/{ref}/api-keys/legacy?enabled=…`) if anything ever needs it.
+
+Both legacy keys (`anon` and `service_role`) are off. Neither was in use: Vercel carries
+only the four `NEXT_PUBLIC_*` variables, and the app authenticates with the publishable
+key.
+
+Verified: `service_role` against the REST API returns **401**.
+
+### D-042 — Modern `sb_secret_…` key deleted ✅ DONE
+
+The publishable/secret pair that replaced anon/service_role still included a secret key,
+which bypasses RLS exactly as `service_role` did. Confirmed it could read `public.classes`
+despite RLS, then deleted it. Nothing referenced it.
+
+**The project now has no RLS-bypassing credential at all**, which is D-004 achieved
+rather than merely intended. If a genuine server-side need ever appears, mint a new
+secret key deliberately — but the design says privileged writes go through
+`SECURITY DEFINER` functions, so treat that need as a red flag.
+
+Final key inventory: legacy anon (disabled), legacy service_role (disabled),
+`sb_publishable_14kXl…` (active, fully constrained by RLS). Zero secret keys.
+
+### D-043 — RLS proven working, not merely enabled ✅ VERIFIED
+
+Using the publishable key — which anyone can extract from the production JavaScript
+bundle:
+
+- `GET /rest/v1/profiles` → `[]`
+- `GET /rest/v1/attendance_records` → `[]`
+- `POST /rest/v1/classes` → `42501: new row violates row-level security policy`
+
+That last one is the first real evidence the boundary holds under a hostile client,
+which is the assumption the whole design rests on.
+
+### D-044 — Management token handling ⚠️ LESSON
+
+A Supabase personal access token (`sbp_…`) was pasted into the chat transcript, where it
+persists and is re-sent on every turn. It was used for D-041/D-042, the local copy was
+shredded immediately after, and the owner was told to revoke it.
+
+**For next time:** credentials should not enter the conversation. Prefer an interactive
+CLI login, or a file written outside the repo and referenced by path.
