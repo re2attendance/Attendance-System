@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { emailForIdentifier, emailForIndex, signIn, signUp } from "./identity";
+import { INDEX_LENGTH, emailForIdentifier, emailForIndex, signIn, signUp } from "./identity";
 
 const valid = {
   fullName: "Ama Mensah",
@@ -62,6 +62,23 @@ describe("signUp", () => {
   // The design decision, asserted: there is no email to get wrong (D-069).
   it("takes no email at all — the address is derived, so it cannot mismatch", () => {
     expect("email" in signUp.shape).toBe(false);
+  });
+});
+
+// The copy is generated from INDEX_LENGTH rather than typed, because it drifted once:
+// 0021 moved the rule to 8 and left "Enter your 7-digit index number" on the reset screen,
+// telling students the opposite of what the form accepted. This fails if that returns.
+describe("error messages track the rule", () => {
+  it("quotes the real index length, on both the signup and the sign-in field", () => {
+    const signUpMessage = signUp.safeParse({ ...valid, indexNumber: "12" }).error?.issues[0]
+      ?.message;
+    const signInMessage = signIn.safeParse({ identifier: "12", password: "x" }).error?.issues[0]
+      ?.message;
+
+    for (const message of [signUpMessage, signInMessage]) {
+      expect(message).toContain(String(INDEX_LENGTH));
+      expect(message).not.toMatch(/\b7\b/);
+    }
   });
 });
 

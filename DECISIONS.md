@@ -1215,3 +1215,50 @@ confirmation email is the _only_ such proof, and Supabase's built-in sender is c
 **2 messages per hour** (measured, D-082). Until Resend is configured, real signups are
 limited to two an hour — which is fine for testing and unusable for a cohort. D-064's
 reasoning is unchanged; its dependency is now on the critical path.
+
+### D-085 — The index length is a constant, and the copy is generated from it ✅ DONE (bug found by RM)
+
+The owner hit it on the reset screen: entering the wrong number of digits answered
+"Enter your **7**-digit index number" after `0021` had moved the rule to 8. The form
+rejected 7 digits while the message demanded them.
+
+`0021` changed the regex and the signup messages. It missed this one because the search
+that found the others looked for `"7 digits"` and this string reads `"7-digit"`. A hyphen.
+
+The fix is not the string. `INDEX_LENGTH = 8` is now the single source, the regex is built
+from it, and every message interpolates it — so the copy cannot disagree with the rule
+again, in any wording. A unit test asserts both messages quote the real length and contain
+no bare `7`.
+
+Worth naming the general shape: **a rule written in prose is a second source of truth that
+nothing type-checks.** The constraint, the regex and the sentence all said the same thing
+until one of them didn't, and only a human reading the screen noticed.
+
+### D-086 — Gmail Workspace SMTP, and two false results on the way ✅ DONE
+
+Custom SMTP is live: `smtp.gmail.com:587`, authenticating as a Workspace account with a
+Google App Password, sender name "UPSA Attendance", and `rate_limit_email_sent` raised from
+**2/hour to 50**. Raising that limit is not optional — configuring SMTP does not lift it,
+so the cap would have survived the whole exercise and throttled signups to two an hour with
+everything else correct.
+
+Chosen over Resend because a Vercel subdomain cannot be a sending domain — Vercel owns that
+DNS zone — and because every recipient is an `@upsamail.edu.gh` address, so Workspace mail
+to Workspace mail never leaves the university and needs no domain verification at all.
+
+**Two false results, both worth recording, because each looked like success or failure and
+was neither:**
+
+1. **A partial PATCH silently wipes the SMTP block.** Sending only `{"smtp_port":"587"}`
+   cleared host, user and password. The next send returned `200` — from Supabase's _built-in_
+   sender, not Gmail — and briefly looked like proof that port 587 fixed things. It proved
+   only that the custom SMTP was gone. Always PATCH the whole block, and always read the
+   config back before trusting a send.
+2. **The failure was the username, not the port.** With the full block restored, 587 failed
+   exactly as 465 had. The account given was `1034493@upsamail.edu.gh`; the App Password
+   belonged to `10344923@upsamail.edu.gh` — one digit apart. Supabase reports every SMTP
+   failure as `500 Error sending recovery email` and exposes nothing further in the auth
+   logs, so the only way through was to change one variable at a time.
+
+The sender is currently a student index address. A dedicated `noreply@upsamail.edu.gh` would
+read better on a confirmation email, and swapping it is a settings change.
