@@ -224,7 +224,7 @@ Each phase: define scope → ask outstanding questions → get reference images 
 
 ## 10. Design direction
 
-- **Aesthetic:** minimalist, **yellow + white** palette, clean and modern — reference the feel of Supabase's own UI.
+- **Aesthetic:** minimalist, **blue + white** palette, clean and modern — reference the feel of Supabase's own UI. _(Amended 2026-07-21 by D-068: the reference designs supplied are blue, and the owner chose the reference over the original yellow.)_
 - **Responsive-first**, with special attention to **phones** (this will be used on the go in class).
 - Purposeful motion via Framer Motion — subtle, not decorative noise.
 - **🚨 Hard gate (repeat of §2.5): before building any real/production screen, STOP and tell me, then wait for my reference designs.** I'll provide them as screenshots and/or Figma files — pull from Figma via the Figma MCP where possible so the build matches the source. Never invent the production UI yourself. Functional scaffolding to test the backend is exempt; the real interface is not.

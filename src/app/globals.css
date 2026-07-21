@@ -1,1 +1,74 @@
 @import "tailwindcss";
+
+/* Design tokens.
+ *
+ * Blue over the yellow in build plan §10, on the owner's call (D-068) — the reference
+ * designs are blue and they win.
+ *
+ * The palette is deliberately narrow: one blue, one near-black, two greys and one red.
+ * An attendance app is read in a hurry, in a lecture hall, on a phone held at arm's
+ * length. Every extra colour is one more thing to decode, and the signal that has to
+ * survive that reading is whether attendance was recorded or not.
+ */
+@theme {
+  /* The blue carries every primary action. Deeper than the reference's, because the
+   * reference sits inside a small card and this layout is full-bleed: the same hue over
+   * more area reads lighter than it measures. */
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #dfe6ff;
+  --color-brand-200: #c3d0ff;
+  --color-brand-500: #3d63f5;
+  --color-brand-600: #2b4ce0;
+  --color-brand-700: #2340bd;
+
+  /* Text. `ink` is not pure black — #000 on #fff vibrates on the OLED phones this will
+   * mostly run on. */
+  --color-ink: #0d1220;
+  --color-ink-soft: #5a6478;
+  --color-ink-faint: #8b93a5;
+
+  /* Surfaces. `sunken` is the resting fill of an input: a filled field reads as a larger
+   * tap target than an outlined one of the same size. */
+  --color-line: #e4e7ef;
+  --color-sunken: #f4f6fa;
+
+  --color-danger: #d02b3a;
+  --color-danger-soft: #fdf0f1;
+
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: white;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* iOS zooms the viewport when a focused input's text is under 16px, and does not zoom
+   * back out afterwards — leaving the student on a form they have to pinch to escape. */
+  input,
+  select,
+  textarea {
+    font-size: max(1rem, 16px);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
