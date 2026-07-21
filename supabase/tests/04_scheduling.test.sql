@@ -2,12 +2,12 @@
 --
 -- The integrity concern here is retroactive cancellation: a course rep who missed a
 -- lecture must not be able to cancel it afterwards and erase their own absence
--- (D-020).
+-- (D-020, time-boxed by D-057).
 
 begin;
 \ir fixtures/world.psql
 
-select plan(18);
+select plan(19);
 
 -- A Monday 09:00-11:00 lecture, repeating all semester.
 insert into public.timetable_entries
@@ -93,6 +93,18 @@ select is(
 -- Cancelling a session
 -- ---------------------------------------------------------------------------
 reset role;
+
+-- The cancellation tests below need ad-hoc sessions placed around `now()`, and a
+-- class cannot be in two places at once. If the suite happens to run on the
+-- timetabled weekday, the generated sitting for today occupies that ground and the
+-- inserts fail — so which day CI runs on decides whether the suite passes. Clear it.
+-- Deleted rather than cancelled: cancelled sessions are exempt from the overlap
+-- constraint, so generation would simply recreate it.
+delete from public.sessions s
+ where s.class_id = t.oid('classA')
+   and tstzrange(s.starts_at, s.ends_at)
+       && tstzrange(now() - interval '3 hours', now() + interval '3 hours');
+
 -- security definer so the id resolves the same for every caller: a student of
 -- another class cannot see this session at all under RLS, and looking it up as them
 -- would yield null and test the lookup rather than the authorisation.
@@ -133,20 +145,47 @@ select lives_ok(
   'a course rep can cancel an upcoming lecture for their own class'
 );
 
--- The one that matters: once attendance has opened, the rep loses the ability to
--- make the lecture disappear.
+-- Attendance having opened no longer locks the rep out (D-057): this session began
+-- five minutes ago, well inside the 45-minute grace, and a lecturer who leaves after
+-- twenty minutes is exactly the case the rep is there to record.
 select t.login(t.uid('rep1'));
 select public.open_attendance_window(t.session());
+select lives_ok(
+  format($$ select public.cancel_session(%L, 'lecturer left after twenty minutes') $$,
+         t.session()),
+  'a rep can call off a lecture inside the grace even after attendance opened'
+);
+
+-- The one that matters, and the reason the grace is time-boxed rather than removed:
+-- past it, cancelling is how a rep erases their own absence.
+reset role;
+insert into public.sessions (semester_id, class_id, course_id, room_id, lecturer_id,
+                             starts_at, ends_at)
+values (t.oid('semester'), t.oid('classA'), t.oid('course'), t.oid('room'),
+        t.oid('lecturer'), now() - interval '90 minutes', now() - interval '30 minutes');
+
+create or replace function t.stale_session() returns uuid
+language sql stable security definer as $$
+  select id from public.sessions
+   where starts_at = now() - interval '90 minutes' and status <> 'cancelled'
+   limit 1
+$$;
+grant execute on function t.stale_session() to public;
+
+set local role authenticated;
+select t.login(t.uid('rep1'));
 select throws_ok(
-  format($$ select public.cancel_session(%L, 'actually we did not meet') $$, t.session()),
+  format($$ select public.cancel_session(%L, 'actually we did not meet') $$,
+         t.stale_session()),
   '42501',
-  'attendance has already opened for this session; only an admin can cancel it now',
-  'a rep cannot retroactively cancel a lecture whose attendance has opened'
+  'a lecture can only be called off in its first 45 minutes; after that only an admin can cancel it',
+  'ninety minutes later the rep can no longer make the lecture disappear'
 );
 
 select t.login(t.uid('admin'));
 select lives_ok(
-  format($$ select public.cancel_session(%L, 'fire alarm, session abandoned') $$, t.session()),
+  format($$ select public.cancel_session(%L, 'fire alarm, session abandoned') $$,
+         t.stale_session()),
   'an admin still can, and it is recorded as a class-scope cancellation'
 );
 
