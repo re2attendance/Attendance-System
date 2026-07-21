@@ -198,3 +198,45 @@ key can be revoked without invalidating every session.
 Phase 0 introduces no business logic, and inventing a smoke test to make the suite
 non-empty would be exactly the dead code §2.9 forbids. The first real tests are the
 Phase 1 Zod email/index schema and the pgTAP RLS proofs. **Remove the flag then.**
+
+---
+
+## 2026-07-21 — Deployment
+
+### D-033 — Vercel project `attendance-system`, GitHub auto-deploy verified ✅ DONE
+
+Live at https://attendance-system-six-sigma.vercel.app. The project already existed
+from the v1 build; reused rather than recreated. Push-to-`main` triggers a production
+build (verified: a deploy started 25s after a push and was ready in 26s), and pull
+requests get preview deployments.
+
+### D-034 — Stale v1 environment variables removed from Vercel ✅ DONE
+
+The project carried four variables from the abandoned build. Removed:
+
+- **`SUPABASE_SERVICE_ROLE_KEY`** — the important one. It bypasses RLS completely and
+  was sitting in Production and Preview for a design that deliberately never uses one
+  (D-004). Nothing in the current codebase referenced it.
+- `CRON_SECRET` — dead v1 config.
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — superseded by the publishable key (D-031).
+
+Added `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and
+`NEXT_PUBLIC_UNIVERSITY_EMAIL_DOMAIN` across production, preview and development.
+
+> **Follow-up for the owner:** removing the key from Vercel does not revoke it.
+> It is still valid in the Supabase dashboard, and it was deployed for a project that
+> has since been abandoned. **Rotate it** (Project Settings → API → service_role →
+> reset) so a copy leaked from the old build cannot bypass RLS on the live database.
+
+### D-035 — Node version is inconsistent across environments ⛔ OPEN
+
+Local is Node 20.20.2, CI pins 20, `engines` says `>=20.9`, but Vercel builds on
+**24.x**. Building and testing on different majors than production is how
+works-on-my-machine bugs reach students.
+
+Worse: **Node 20 reached end of life in April 2026** — it is no longer receiving
+security patches, and it is what the local machine and CI are both on.
+
+Recommendation: align everything on **Node 22 LTS** — update `engines`, the CI
+`node-version`, and the Vercel project setting, and upgrade the local runtime via nvm.
+Not done yet: it changes the local toolchain, so it needs approval first.
