@@ -1180,3 +1180,38 @@ metadata gets its profile created rather than being asked for the same details t
 
 The dashboard keeps its own session check. It is one line, it makes the page safe to read on
 its own terms, and it is what tells the type checker the user is not null.
+
+### D-084 — Google sign-in removed ✅ DONE (by RM)
+
+Reverses the Google half of D-071 and collapses D-064's "both paths" to one. The owner
+chose to drop it rather than complete the Google Cloud setup, which could not be automated:
+Google exposes no public API for creating OAuth client credentials, so that part was always
+going to be manual.
+
+Removed: `GoogleButton`, `OrDivider` (it existed only to separate Google from the form, and
+a component with no callers is dead code), the buttons on both auth screens, and the note on
+the reset screen telling Google users they had no password.
+
+**Removing it fixed a bug it had introduced.** `/auth/callback` checked that the returned
+address ended in `upsamail.edu.gh`, because Google's `hd` parameter travels in an editable
+URL and could not be trusted. That check was correct for Google and quietly wrong for
+everyone else: the admin account is `re2attendance@yahoo.com`, which is **not** on the
+university domain — so clicking its own password-reset link would have exchanged the code,
+failed the domain test, and signed the admin straight back out. Nobody had hit it yet
+because the admin account does not exist.
+
+Nothing is lost by dropping the check. Every account that can reach the callback was made
+by our own signup — where the address is derived from the index number rather than typed,
+and enforced by `profiles_email_shape` — or by hand in the dashboard, which is the admin.
+
+`/auth/callback` and `/complete-profile` both stay. The callback still receives confirmation
+and password-reset links. `/complete-profile` is no longer "the step Google leaves behind"
+but the way back for any session without a profile — an account created outside the signup
+form, or one whose stored class no longer exists.
+
+**The consequence that matters: SMTP is now mandatory, not optional.** Google was the
+alternative proof that a student owns their university address. With it gone, the
+confirmation email is the _only_ such proof, and Supabase's built-in sender is capped at
+**2 messages per hour** (measured, D-082). Until Resend is configured, real signups are
+limited to two an hour — which is fine for testing and unusable for a cohort. D-064's
+reasoning is unchanged; its dependency is now on the critical path.

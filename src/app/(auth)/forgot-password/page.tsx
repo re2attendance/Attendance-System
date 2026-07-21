@@ -18,13 +18,6 @@ export default function ForgotPasswordPage() {
 
       <ForgotPasswordForm />
 
-      {/* Signed up with Google and now stuck here: there is no password to reset, and
-          saying so is better than sending a link that never arrives. */}
-      <p className="border-line bg-sunken text-ink-soft mt-6 rounded-xl border px-4 py-3.5 text-[0.8125rem]">
-        If you signed up with Google, you do not have a password — go back and use{" "}
-        <span className="text-ink font-medium">Continue with Google</span>.
-      </p>
-
       <p className="text-ink-soft mt-8 text-[0.9375rem]">
         <Link href="/sign-in" className="text-brand-600 hover:text-brand-700 rounded font-semibold">
           Back to sign in

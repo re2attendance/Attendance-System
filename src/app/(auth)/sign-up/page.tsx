@@ -1,7 +1,5 @@
 import Link from "next/link";
 
-import { OrDivider } from "@/components/ui/divider";
-import { GoogleButton } from "@/components/ui/google-button";
 import { PageHeading } from "@/components/ui/page-heading";
 import { createClient } from "@/lib/supabase/server";
 import type { ClassOption } from "@/components/ui/class-select";
@@ -40,11 +38,7 @@ export default async function SignUpPage() {
           them, then come back.
         </p>
       ) : (
-        <div className="space-y-5">
-          <GoogleButton label="Sign up with Google" />
-          <OrDivider />
-          <SignUpForm classes={classes} />
-        </div>
+        <SignUpForm classes={classes} />
       )}
 
       <p className="text-ink-soft mt-8 text-[0.9375rem]">

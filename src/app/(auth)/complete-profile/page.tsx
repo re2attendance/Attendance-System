@@ -7,8 +7,9 @@ import { CompleteProfileForm } from "./complete-profile-form";
 export const metadata = { title: "One last thing · UPSA Attendance" };
 
 /**
- * The step Google leaves behind. It can prove the address and hand us a name; it has no
- * idea which class someone is in, and `profiles.class_id` is not null.
+ * The way back for an account that has a session but no profile — created outside the
+ * signup form, or carrying details the schema no longer accepts. `profiles.class_id` is
+ * not null, so the class is the one thing that must be asked for.
  */
 export default async function CompleteProfilePage() {
   const supabase = await createClient();

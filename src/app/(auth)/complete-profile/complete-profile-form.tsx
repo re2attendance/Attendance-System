@@ -21,8 +21,7 @@ export function CompleteProfileForm({
     <form action={submit} className="space-y-5" noValidate>
       <FormError message={result?.error} />
 
-      {/* Prefilled from Google, still editable: the name on a Google account is often not
-          the name on a class register. */}
+      {/* Prefilled from whatever the account already carries, and still editable. */}
       <Field label="Full name">
         {({ id, describedBy, invalid }) => (
           <Input

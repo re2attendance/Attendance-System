@@ -87,9 +87,8 @@ export function emailForIdentifier(identifier: string): string {
   return INDEX_NUMBER.test(value) ? emailForIndex(value) : value;
 }
 
-// Google proves the address and supplies a name, but cannot know which class someone is
-// in. This is the gap it leaves — and note there is still no index field: it is read from
-// the address Google proved, never typed.
+// For an account that reached a session without a profile. Note there is still no index
+// field: it is read from the confirmed address, never typed.
 export const completeProfile = signUp.pick({ fullName: true, classId: true });
 
 export type SignUpInput = z.infer<typeof signUp>;
