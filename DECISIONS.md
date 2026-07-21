@@ -650,4 +650,39 @@ starts producing riskier migrations:
    column. Branching will apply it the moment it is pushed.
 
 Not changed unilaterally — it is a workflow decision, and the current setup is what the
-owner has been using.
+owner has been using. Closed by D-060.
+
+### D-060 — `main` is protected and gated on the database suite ✅ DONE (asked for by RM)
+
+Closes question 1 of D-059. GitHub branch protection on `main`, requiring the `database`
+status check — the CI job that stands up a real Postgres, applies all 17 migrations from
+scratch and runs the 128 pgTAP assertions.
+
+Settings, and why each one:
+
+- **`required_status_checks: ["database"], strict: true`.** `strict` forces the branch to
+  be up to date with `main` before merging, so the suite runs against the code that will
+  actually land rather than against a stale base.
+- **`enforce_admins: true`.** The owner is the only person who pushes here and is an
+  admin; with this false the rule would apply to nobody and the protection would be
+  decorative. The escape hatch is still there — an admin can turn protection off
+  deliberately — but it is now a deliberate act rather than an ordinary push.
+- **`required_pull_request_reviews: null`.** No approval requirement. On a solo repo that
+  would deadlock every merge, and the gate that matters here is the test suite, not a
+  second pair of eyes.
+- **Force pushes and branch deletion disabled**, because Supabase Branching applies
+  whatever lands on `main` and a rewritten history is a schema you cannot reason about.
+
+**The workflow this creates:** direct pushes to `main` are now rejected outright
+(`GH006: Required status check "database" is expected` — verified with a real push, not
+assumed). Work goes on a branch, then a PR, and merges once CI is green. Since
+Branching deploys on merge to `main`, that check is now the last thing standing between
+a migration and the production database.
+
+`verify` (lint, typecheck, build) is deliberately **not** required yet. It guards the
+frontend, and there is no frontend; adding it now would mean a red build could block a
+database fix. Worth adding the moment Phase 1 starts.
+
+Question 2 of D-059 — whether a destructive migration should reach production with no
+human in the loop — is still open. A required check proves a migration _passes its
+tests_; it does not prove a `drop column` was intended.
