@@ -949,3 +949,61 @@ correct form is a plain `:root` override inside the media query.
 
 Nothing catches this except reading the compiled CSS, which is how it was caught: the
 built stylesheet had the dark values sitting in the light `:root`.
+
+### D-074 — The palette is UPSA's own: navy #2b2c49, gold #cc910f ✅ DECIDED (by RM)
+
+Supersedes D-068. The owner supplied the university crest, and its two colours were
+sampled directly from the artwork rather than eyeballed — gold `#cc910f`, navy `#2b2c49`.
+
+This resolves a confusion running through the whole project. §10 originally specified
+"yellow + white"; that yellow was almost certainly this gold all along. The blue adopted in
+D-068 came from a stock reference screenshot, not from the institution — so the palette had
+drifted away from the brand on the strength of a template.
+
+**Navy leads, gold accents**, and the order is a legibility decision rather than a taste
+one: white on this gold measures ~2.5:1 and fails accessibility outright, so a gold primary
+button would have to carry dark text. Navy carries white at ~15:1, which is the right
+footing for a screen read at arm's length in a lecture hall. Gold is kept for the crest and
+for the one moment worth marking — the pill where a student's derived university address
+resolves.
+
+Gold being used somewhere is not decoration: Tailwind v4 tree-shakes unreferenced theme
+tokens, so a colour no component uses is silently absent from the build. The first build
+after this change shipped no gold at all, which is how that was noticed.
+
+The crest arrived as a JPEG on white. It is processed into `public/upsa-crest.png` with the
+white knocked out through an alpha ramp, so it does not sit in a white box on the dark
+theme. **An SVG from the university would be better** and should replace it when available.
+
+### D-075 — Theme follows the device, and the student can override it ✅ DECIDED (by RM)
+
+Three states, not a toggle: System (default), Light, Dark. A two-way switch has no way back
+to "follow my phone" once touched, so a student who tries dark at night is pinned to it
+every morning afterwards.
+
+**Stored in a cookie, read server-side, stamped onto `<html data-theme>` before first
+paint.** The alternative — deciding the theme in a client script — is where the flash of
+the wrong theme comes from: the page renders light, the script runs, the screen snaps to
+dark. Worst at night, which is exactly when someone has dark mode on.
+
+A cookie rather than the database, deliberately: it works before a profile exists (both
+signup routes pass through several screens first), it survives sign-out, and a display
+preference is not attendance data — it does not belong in a table protected by RLS. The
+cost is that it does not follow the student to a second device, which is an acceptable
+trade for something re-picked in one tap.
+
+"System" clears the cookie rather than storing a third value, so it keeps tracking the
+device instead of pinning whatever the device happened to be at the moment it was chosen.
+
+Two implementation notes worth keeping:
+
+- **The dark token block is duplicated across two selectors** — `:root[data-theme="dark"]`
+  and `@media (prefers-color-scheme: dark) :root:not([data-theme="light"])`. CSS cannot
+  apply one declaration block to both a media-scoped and an attribute selector.
+  `light-dark()` would collapse them, but Tailwind's opacity modifiers compile to
+  `color-mix()` over the token and nesting `light-dark()` inside that is not worth betting
+  the interface on.
+- **`next/headers` cannot be imported by anything a client component touches.** The theme
+  constants and `readTheme()` started in one module; importing `THEMES` into the switch
+  dragged `next/headers` into the browser bundle and failed the build. Split into
+  `theme.ts` (pure) and `theme-server.ts` (`import "server-only"`).

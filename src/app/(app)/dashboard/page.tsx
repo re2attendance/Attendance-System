@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
+import { ThemeSwitch } from "@/components/theme-switch";
 import { signOut } from "@/lib/auth/actions";
+import { readTheme } from "@/lib/theme-server";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = { title: "Dashboard · Attendance" };
@@ -12,6 +14,7 @@ export const metadata = { title: "Dashboard · Attendance" };
  */
 export default async function DashboardPage() {
   const supabase = await createClient();
+  const theme = await readTheme();
 
   // getUser(), not getSession(): getSession() believes the cookie, getUser() asks the
   // Auth server whether the token is real. This is the gate on the whole signed-in area.
@@ -50,6 +53,18 @@ export default async function DashboardPage() {
           Nothing here yet. Your classes and attendance will appear once your timetable is set up.
         </p>
       </main>
+
+      {/* Settings will grow into their own screen; until there is more than one, a
+          screen for a single control would be a screen nobody opens. */}
+      <footer className="border-line mt-8 flex items-center justify-between gap-4 border-t pt-6">
+        <div>
+          <p className="text-ink text-[0.875rem] font-medium">Appearance</p>
+          <p className="text-ink-soft text-[0.8125rem]">
+            Follows your device unless you choose otherwise.
+          </p>
+        </div>
+        <ThemeSwitch current={theme} />
+      </footer>
     </div>
   );
 }

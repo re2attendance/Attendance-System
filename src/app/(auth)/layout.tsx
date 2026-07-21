@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 /**
@@ -21,7 +22,14 @@ export default function AuthLayout({ children }: Readonly<{ children: React.Reac
           className="inline-flex items-center gap-2.5 rounded-lg"
           aria-label="Attendance, home"
         >
-          <Mark />
+          <Image
+            src="/upsa-crest.png"
+            alt=""
+            width={512}
+            height={673}
+            priority
+            className="h-11 w-auto"
+          />
           <span className="text-ink text-[0.9375rem] font-bold tracking-tight">Attendance</span>
         </Link>
       </header>
@@ -30,31 +38,5 @@ export default function AuthLayout({ children }: Readonly<{ children: React.Reac
           same x for the heading, every label, and every field. */}
       <main className="w-full max-w-sm flex-1">{children}</main>
     </div>
-  );
-}
-
-/**
- * The mark: a checked register line. Two rows of a class list, the top one ticked.
- * It says "attendance" without a building, a graduation cap, or a location pin.
- */
-function Mark() {
-  return (
-    <span className="bg-brand-600 text-on-brand grid size-9 place-items-center rounded-[0.625rem]">
-      <svg
-        className="size-5"
-        viewBox="0 0 20 20"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M3 6.5 4.8 8.3 8.2 4.9" />
-        <path d="M11.5 6.6H17" />
-        <path d="M3 13.5h5.2" />
-        <path d="M11.5 13.5H17" />
-      </svg>
-    </span>
   );
 }

@@ -74,9 +74,9 @@ export function SignUpForm({ classes }: { classes: ClassOption[] }) {
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
               className="overflow-hidden"
             >
-              <div className="bg-brand-50 mt-3 flex items-center gap-2.5 rounded-xl px-4 py-3">
+              <div className="bg-accent-soft mt-3 flex items-center gap-2.5 rounded-xl px-4 py-3">
                 <svg
-                  className="text-brand-600 size-4 shrink-0"
+                  className="text-accent size-4 shrink-0"
                   viewBox="0 0 16 16"
                   fill="none"
                   stroke="currentColor"

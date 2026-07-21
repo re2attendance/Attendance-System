@@ -50,9 +50,9 @@ export default async function CompleteProfilePage() {
       </div>
 
       {/* The proven identity, shown rather than asked for. */}
-      <div className="bg-brand-50 mb-6 flex items-center gap-2.5 rounded-xl px-4 py-3">
+      <div className="bg-accent-soft mb-6 flex items-center gap-2.5 rounded-xl px-4 py-3">
         <svg
-          className="text-brand-600 size-4 shrink-0"
+          className="text-accent size-4 shrink-0"
           viewBox="0 0 16 16"
           fill="none"
           stroke="currentColor"

@@ -1,43 +1,46 @@
 @import "tailwindcss";
 
-/* Design tokens.
+/* Design tokens — UPSA's own colours, sampled from the crest (D-074).
  *
- * Blue over the yellow in build plan §10, on the owner's call (D-068) — the reference
- * designs are blue and they win.
+ * Navy #2b2c49 and gold #cc910f are the institution's, not a stock palette. The blue this
+ * started with came from a template screenshot; §10's original "yellow" was almost
+ * certainly this gold all along.
  *
- * The palette is deliberately narrow: one blue, one near-black, two greys and one red.
- * An attendance app is read in a hurry, in a lecture hall, on a phone held at arm's
- * length. Every extra colour is one more thing to decode, and the signal that has to
- * survive that reading is whether attendance was recorded.
+ * Navy leads and gold accents, rather than the reverse, for a legibility reason: white on
+ * this gold measures ~2.5:1 and fails outright, so a gold primary button would have to
+ * carry dark text. Navy carries white at ~15:1 — the safest footing for a screen read at
+ * arm's length in a lecture hall.
  *
- * Every colour here is *semantic* — `surface`, `sunken`, `ink` — rather than a shade
- * name. That is what lets the dark theme below be a list of new values instead of a
- * second set of components (D-073).
+ * Every colour is semantic — `surface`, `sunken`, `ink` — never a shade name. That is what
+ * lets the dark theme be a list of new values instead of a second set of components.
  */
 @theme {
-  /* The blue carries every primary action. */
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #dfe6ff;
-  --color-brand-500: #3d63f5;
-  --color-brand-600: #2b4ce0;
-  --color-brand-700: #2340bd;
-  /* Text that sits on the brand colour. Not `white` literally: on the dark theme the
-   * blue lightens, and near-black on it reads better than white. */
+  /* Navy: every primary action. */
+  --color-brand-50: #eeeef4;
+  --color-brand-100: #d9dae6;
+  --color-brand-500: #3d3f68;
+  --color-brand-600: #2b2c49;
+  --color-brand-700: #1d1e33;
+  /* Text sitting on the brand colour — flips in dark mode, where the navy lightens. */
   --color-on-brand: #ffffff;
 
-  /* Text. `ink` is not pure black — #000 on #fff vibrates on the OLED phones this will
-   * mostly run on. */
-  --color-ink: #0d1220;
-  --color-ink-soft: #5a6478;
-  --color-ink-faint: #8b93a5;
+  /* Gold: the crest, and the moments worth marking. Used sparingly on purpose — spread
+   * across the interface it fights the navy instead of pointing at anything. */
+  --color-accent: #cc910f;
+  --color-accent-soft: #fdf3e0;
 
-  /* Surfaces. `sunken` is the resting fill of an input: a filled field reads as a larger
-   * tap target than an outlined one of the same size. `raised` is what it becomes on
-   * focus, and the fill of a secondary button. */
+  /* Text, tinted toward the navy rather than neutral grey, so the greys belong to the
+   * same family as the brand. `ink` is never pure black — it vibrates on OLED phones. */
+  --color-ink: #16172b;
+  --color-ink-soft: #5b5d75;
+  --color-ink-faint: #8a8da4;
+
+  /* Surfaces. `sunken` is an input at rest — a filled field reads as a larger tap target
+   * than an outlined one of the same size. `raised` is what it becomes on focus. */
   --color-surface: #ffffff;
   --color-raised: #ffffff;
-  --color-line: #e4e7ef;
-  --color-sunken: #f4f6fa;
+  --color-line: #e5e5ee;
+  --color-sunken: #f5f5f9;
 
   --color-danger: #d02b3a;
   --color-danger-soft: #fdf0f1;
@@ -47,55 +50,83 @@
 
 /* The dark theme.
  *
- * Not an inversion. Pure black is avoided for the same reason pure white is — and the
- * surfaces separate by lightness rather than by borders, because hairlines that read
- * cleanly on white turn to mud on a dark ground.
+ * Deliberately duplicated across two selectors rather than written once. The media query
+ * has to be beatable by an explicit choice, and CSS cannot apply one declaration block to
+ * both a media-scoped selector and an attribute selector. `light-dark()` would collapse
+ * them, but Tailwind's opacity modifiers (`ring-brand-500/15`) compile to `color-mix()`
+ * over the token, and nesting `light-dark()` inside that is not somewhere worth betting
+ * the interface. Two selectors, one source of truth for the values, checked in the built
+ * CSS (D-073).
  *
- * The blue lightens: #2b4ce0 on near-black fails contrast for the text sitting on it,
- * and a primary button nobody can read is not a primary button.
+ * Not an inversion. Pure black is avoided for the same reason pure white is, surfaces
+ * separate by lightness rather than hairlines (which turn to mud on a dark ground), and
+ * the navy *lightens* — #2b2c49 on near-black is barely distinguishable from the page, and
+ * a primary button nobody can find is not a primary button.
  */
-/* The dark theme.
- *
- * A plain `:root` override, not a second `@theme` block. Tailwind v4 hoists every
- * `@theme` into one root declaration regardless of the at-rule wrapping it, so nesting
- * one inside a media query does not scope it — it silently overwrites the light theme
- * and dark mode is simply always on. Caught by reading the compiled CSS (D-073).
- *
- * Not an inversion. Pure black is avoided for the same reason pure white is, and the
- * surfaces separate by lightness rather than by borders, because hairlines that read
- * cleanly on white turn to mud on a dark ground.
- *
- * The blue lightens: #2b4ce0 against near-black fails contrast for the text sitting on
- * it, and a primary button nobody can read is not a primary button.
- */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @media (prefers-color-scheme: dark) {
-  :root {
-    --color-brand-50: #171f38;
-    --color-brand-100: #1e2a4d;
-    --color-brand-500: #7d97ff;
-    --color-brand-600: #6b87ff;
-    --color-brand-700: #8aa2ff;
-    --color-on-brand: #0b101d;
+  :root:not([data-theme="light"]) {
+    --color-brand-50: #1b1c30;
+    --color-brand-100: #262845;
+    --color-brand-500: #7f83c4;
+    --color-brand-600: #9296d6;
+    --color-brand-700: #a9ade4;
+    --color-on-brand: #14152a;
 
-    --color-ink: #eef1f7;
-    --color-ink-soft: #a2acc0;
-    --color-ink-faint: #737e94;
+    --color-accent: #e0a63a;
+    --color-accent-soft: #2a2113;
 
-    --color-surface: #0b101d;
-    --color-raised: #161d2e;
-    --color-line: #263048;
-    --color-sunken: #141b2b;
+    --color-ink: #eceef6;
+    --color-ink-soft: #a5a8bd;
+    --color-ink-faint: #757891;
+
+    --color-surface: #0f1020;
+    --color-raised: #1a1b30;
+    --color-line: #2b2d45;
+    --color-sunken: #17182a;
 
     --color-danger: #ff8189;
     --color-danger-soft: #2a1519;
   }
 }
 
+:root[data-theme="dark"] {
+  --color-brand-50: #1b1c30;
+  --color-brand-100: #262845;
+  --color-brand-500: #7f83c4;
+  --color-brand-600: #9296d6;
+  --color-brand-700: #a9ade4;
+  --color-on-brand: #14152a;
+
+  --color-accent: #e0a63a;
+  --color-accent-soft: #2a2113;
+
+  --color-ink: #eceef6;
+  --color-ink-soft: #a5a8bd;
+  --color-ink-faint: #757891;
+
+  --color-surface: #0f1020;
+  --color-raised: #1a1b30;
+  --color-line: #2b2d45;
+  --color-sunken: #17182a;
+
+  --color-danger: #ff8189;
+  --color-danger-soft: #2a1519;
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
-    /* Tells the browser to render form controls, scrollbars and the like to match. */
+    /* Follows the system by default; the explicit choices below override it so that form
+     * controls, scrollbars and autofill match the theme the user actually picked. */
     color-scheme: light dark;
+  }
+  html[data-theme="light"] {
+    color-scheme: light;
+  }
+  html[data-theme="dark"] {
+    color-scheme: dark;
   }
 
   body {

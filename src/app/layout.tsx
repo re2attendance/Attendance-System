@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 
+import { readTheme } from "@/lib/theme-server";
+
 import "./globals.css";
 
 // Plus Jakarta Sans over Inter or Geist: both are the default of every framework starter,
@@ -22,7 +24,7 @@ export const viewport: Viewport = {
   // white band above a dark page.
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b101d" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f1020" },
   ],
   width: "device-width",
   initialScale: 1,
@@ -30,9 +32,18 @@ export const viewport: Viewport = {
   // takes magnification away from anyone who needs it.
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const theme = await readTheme();
+
   return (
-    <html lang="en" className={jakarta.variable}>
+    // `data-theme` is omitted for "system" so the prefers-color-scheme query stays in
+    // charge; an explicit value beats it. Set here, server-side, so the correct theme is
+    // in the HTML before first paint rather than snapping into place after hydration.
+    <html
+      lang="en"
+      className={jakarta.variable}
+      data-theme={theme === "system" ? undefined : theme}
+    >
       <body className="antialiased">{children}</body>
     </html>
   );
